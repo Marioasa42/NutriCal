@@ -179,3 +179,92 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   existan pantallas reales.
 - **Alternativa descartada**: pnpm, más rápido y con menos consumo de disco, pero
   añade un paso de instalación en CI sin resolver ningún problema que tengamos hoy.
+
+## D-010 React Router desde la fase 1, con el día del diario en la URL
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la aplicación podría empezar con una sola vista y estado local
+  para decidir qué se muestra.
+- **Decisión**: se usa React Router desde el principio y el día del diario forma
+  parte de la ruta, por ejemplo `/dia/2026-09-13`.
+- **Por qué**: el día es el estado principal de la aplicación y pertenece a la
+  URL. Así funciona el botón de atrás, se puede guardar un día en marcadores o
+  compartirlo, y la fase 3 encuentra las rutas ya definidas cuando haya que
+  decidir qué se guarda en caché sin conexión.
+- **Alternativa descartada**: una vista única con estado local. Menos piezas hoy,
+  pero obliga a reestructurar la navegación justo cuando llegue la PWA, que es el
+  peor momento para tocarla.
+
+## D-011 `useReducer` con contexto para el estado de interfaz, no Zustand
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: los datos que vienen de fuera los gestiona TanStack Query. Queda
+  el estado propio de la interfaz, que en la fase 1 es poco: el diálogo abierto,
+  el texto de búsqueda y el registro que se está editando.
+- **Decisión**: `useReducer` con contexto de React. Sin dependencia externa.
+- **Por qué**: una librería de estado global resuelve problemas que todavía no
+  tenemos. Añadirla ahora sería difícil de defender en una entrevista.
+- **Alternativa descartada**: Zustand desde el principio, que evita un cambio
+  posterior y se maneja mejor cuando el estado crece.
+- **Consecuencias**: criterio explícito para cambiar de idea, para no quedar
+  atrapado en la decisión. Si aparece estado de interfaz compartido por ramas
+  distintas del árbol de componentes, o si el contexto provoca renderizados
+  medibles en las gráficas, se migra a Zustand y se añade una decisión nueva.
+
+## D-012 La búsqueda por código de barras tecleado se adelanta a la fase 1
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el plan situaba el escaneo de códigos en la fase 3, pero teclear
+  un código a mano no es escanear.
+- **Decisión**: la fase 1 incluye buscar por código de barras escrito. La fase 3
+  añade solo la cámara y la detección automática.
+- **Por qué**: es la misma API y una consulta más simple que la búsqueda por
+  texto. Además, el requisito de degradación elegante exige que siempre se pueda
+  teclear el código: si esa vía es la alternativa cuando no hay cámara, conviene
+  que sea la primera que existe y no la última.
+- **Alternativa descartada**: dejarlo todo para la fase 3, más fiel al plan
+  escrito, pero deja sin probar hasta el final el camino que debe funcionar
+  siempre.
+
+## D-013 Open Food Facts se consulta a través de una función serverless propia
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: sus condiciones de uso exigen una cabecera `User-Agent`
+  identificativa con nombre de aplicación, versión y contacto, y el navegador no
+  permite fijar esa cabecera desde JavaScript. Además el límite de búsqueda es de
+  diez peticiones por minuto y por dirección IP, con aviso explícito de no usarlo
+  para buscar mientras se teclea. En Vercel la IP es compartida, así que un abuso
+  afectaría a terceros.
+- **Decisión**: dos funciones serverless, `/api/off/search` y
+  `/api/off/product/[barcode]`, son el único punto que habla con Open Food Facts.
+  Añaden el `User-Agent` correcto, normalizan la clave de caché, piden solo los
+  campos necesarios y devuelven cabeceras de caché para que la red de
+  distribución de Vercel guarde la respuesta. El frontend habla solo con esta API,
+  con espera de 400 ms tras dejar de teclear, cancelación de la petición anterior
+  y un mínimo de tres caracteres. Todo alimento consultado se guarda en Dexie y la
+  búsqueda mira primero en local.
+- **Por qué**: la caché vive delante de la función, no dentro, porque una función
+  serverless no conserva estado entre invocaciones. Indexada por URL en la red de
+  distribución, la respuesta se comparte entre todos los visitantes, de modo que
+  la segunda consulta del mismo producto ni siquiera ejecuta nuestro código.
+  `stale-while-revalidate` sirve la copia anterior mientras se refresca. Y es la
+  misma capa que la fase 2 necesitará para esconder la clave de USDA, así que
+  montarla ahora no es trabajo adelantado, es no montarla dos veces.
+- **Alternativa descartada**: (a) llamar a Open Food Facts desde el navegador, que
+  incumple sus condiciones y arriesga el bloqueo de una IP compartida; (b) un mapa
+  en memoria dentro de la función como caché principal, que muere al enfriarse la
+  instancia y no se comparte entre instancias; (c) cachear solo en Dexie, que
+  protege un dispositivo pero no la dirección IP común a todos los visitantes;
+  (d) Redis o un almacén de clave y valor desde el primer día, que funciona pero
+  añade servicio, secreto y latencia para hacer peor lo que la red de distribución
+  ya hace; (e) empaquetar una copia estática del catálogo, demasiado pesada y
+  condenada a envejecer.
+- **Consecuencias**: el límite de ritmo propio será de mejor esfuerzo, con un
+  contador en memoria por instancia caliente, y devolverá el código de estado de
+  demasiadas peticiones con cabecera de reintento. No es un límite global exacto.
+  Si el tráfico lo justificara, la vía es un contador de ventana deslizante en un
+  almacén compartido, y se registrará como decisión propia en ese momento.

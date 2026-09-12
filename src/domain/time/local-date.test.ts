@@ -9,6 +9,15 @@ import {
 } from '@/domain/time/local-date';
 import { InvariantError } from '@/shared/lib/invariant';
 
+describe('entorno de los tests', () => {
+  it('corre en UTC', () => {
+    // Guarda de la configuración: si alguien quita `env: { TZ: 'UTC' }` de
+    // vite.config.ts, esto falla aquí en lugar de fallar de forma misteriosa en
+    // la integración continua meses después.
+    expect(new Date().getTimezoneOffset()).toBe(0);
+  });
+});
+
 describe('localDate', () => {
   it('acepta fechas bien formadas', () => {
     expect(localDate('2026-09-12')).toBe('2026-09-12');

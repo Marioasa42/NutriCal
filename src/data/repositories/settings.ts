@@ -1,8 +1,8 @@
 import { db, type NutriCalDatabase } from '@/data/db';
+import { ALIVE, fromStored, toStored } from '@/data/stored';
 import { asDeleted } from '@/data/tombstone';
 import { goalsEffectiveOn, type DailyGoals } from '@/domain/goals/goals';
 import type { GoalsId } from '@/domain/identity/ids';
-import { isAlive } from '@/domain/persistence/persisted';
 import type { Profile } from '@/domain/profile/profile';
 import { now, type Instant, type LocalDate } from '@/domain/time/local-date';
 
@@ -17,29 +17,27 @@ import { now, type Instant, type LocalDate } from '@/domain/time/local-date';
 export function createGoalsRepository(database: NutriCalDatabase) {
   return {
     async save(goals: DailyGoals): Promise<void> {
-      await database.goals.put(goals);
+      await database.goals.put(toStored(goals));
     },
 
     /** Todas las versiones vivas, de la más reciente a la más antigua. */
     async allVersions(): Promise<readonly DailyGoals[]> {
-      const versions = await database.goals.toArray();
-      return versions
-        .filter(isAlive)
-        .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+      const stored = await database.goals.where('isDeleted').equals(ALIVE).toArray();
+      return stored.map(fromStored).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
     },
 
     /** Los objetivos que regían en un día concreto, que no son los de hoy. */
     async effectiveOn(date: LocalDate): Promise<DailyGoals | undefined> {
-      const versions = await database.goals.toArray();
-      return goalsEffectiveOn(versions, date);
+      const stored = await database.goals.where('isDeleted').equals(ALIVE).toArray();
+      return goalsEffectiveOn(stored.map(fromStored), date);
     },
 
     async remove(id: GoalsId, at: Instant = now()): Promise<void> {
-      const goals = await database.goals.get(id);
-      if (goals === undefined) {
+      const stored = await database.goals.get(id);
+      if (stored === undefined) {
         return;
       }
-      await database.goals.put(asDeleted(goals, at));
+      await database.goals.put(toStored(asDeleted(fromStored(stored), at)));
     },
   };
 }
@@ -52,12 +50,12 @@ export function createGoalsRepository(database: NutriCalDatabase) {
 export function createProfileRepository(database: NutriCalDatabase) {
   return {
     async save(profile: Profile): Promise<void> {
-      await database.profile.put(profile);
+      await database.profile.put(toStored(profile));
     },
 
     async current(): Promise<Profile | undefined> {
-      const profiles = await database.profile.toArray();
-      return profiles.find(isAlive);
+      const stored = await database.profile.where('isDeleted').equals(ALIVE).first();
+      return stored === undefined ? undefined : fromStored(stored);
     },
   };
 }

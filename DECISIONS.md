@@ -268,3 +268,70 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   demasiadas peticiones con cabecera de reintento. No es un límite global exacto.
   Si el tráfico lo justificara, la vía es un contador de ventana deslizante en un
   almacén compartido, y se registrará como decisión propia en ese momento.
+
+## D-014 Campos de almacenamiento derivados: `isDeleted` y `searchText`
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: IndexedDB no indexa los registros cuya clave de índice está
+  ausente. Como una entidad viva no tiene `deletedAt`, un índice sobre ese campo
+  dejaría fuera justo los registros que siempre queremos consultar. La primera
+  versión del repositorio resolvía el filtro en memoria tras la lectura: el
+  índice por fecha sí acotaba a un día, pero de ese día se leían también las
+  filas con lápida, y las consultas que recorren la tabla entera, como el listado
+  de alimentos o las versiones de objetivos, leían todo. Además el texto de
+  búsqueda se normalizaba en cada consulta y por cada fila.
+- **Decisión**: la capa de datos envuelve cada entidad antes de escribirla en un
+  tipo `Stored<T>` que añade `isDeleted` con valor 0 o 1, siempre presente y
+  derivado de `deletedAt` en un único punto. Los alimentos añaden además
+  `searchText`, el nombre y la marca ya normalizados, calculado al escribir. Los
+  índices de consulta empiezan todos por la bandera: `[isDeleted+date]`,
+  `[isDeleted+date+slot]`, `[isDeleted+source.barcode]`,
+  `[isDeleted+effectiveFrom]`. Al leer se desenvuelve, de modo que el dominio y
+  el archivo de exportación nunca ven estos campos.
+- **Por qué**: excluir lo borrado deja de ser un filtro posterior a la lectura y
+  pasa a formar parte de la consulta, así que las filas con lápida ni se leen.
+  Mantener la bandera fuera de `Persisted` evita contaminar el dominio con un
+  detalle de almacenamiento, y derivarla en un solo sitio impide que la bandera y
+  la fecha se contradigan. Se hace ahora, antes del primer despliegue, porque
+  cambiar el esquema cuando ya hay datos cuesta una migración.
+- **Alternativa descartada**: (a) guardar `deletedAt` con un valor centinela como
+  cadena vacía en lugar de ausente, que rompe la regla de D-001 de que ausente
+  significa desconocido y mete un valor falso en el dominio; (b) añadir
+  `isDeleted` directamente a `Persisted`, que mezcla almacenamiento y dominio y
+  crea dos fuentes de verdad sobre lo mismo; (c) mover las filas borradas a una
+  tabla de papelera, que duplica la lógica de escritura y complica la
+  exportación; (d) dejarlo con el filtro en memoria, aceptable hoy por volumen
+  pero que se paga justo cuando ya no se puede cambiar barato.
+- **Consecuencias**: la lectura por clave primaria sigue comprobando la bandera en
+  memoria, porque devuelve una sola fila y no hay nada que un índice pueda
+  ahorrar. Y el desenvoltorio usa una aserción de tipo, confinada a un solo
+  archivo, porque quitar una propiedad de una unión discriminada no se expresa en
+  el sistema de tipos sin repetir la unión entera.
+
+## D-015 La versión del esquema de Dexie se congela al desplegar
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el esquema de Dexie no es un archivo de configuración cualquiera.
+  Describe la forma de una base de datos que vive en el navegador de otra
+  persona, fuera de nuestro alcance, y que puede llevar meses sin abrirse.
+- **Decisión**: desde el momento en que una versión del esquema llega a un
+  despliegue que alguien puede abrir, esa declaración queda congelada y no se
+  edita nunca más. Cualquier cambio posterior, incluido añadir un índice, exige
+  una llamada nueva a `version(n + 1).stores(...)` con su `upgrade(...)` si hace
+  falta transformar datos. Las declaraciones antiguas se quedan en el archivo
+  para siempre, porque Dexie las necesita para saber cómo llevar una base de
+  datos vieja hasta la actual. En la práctica el punto de congelación es la
+  fusión a `main`, ya que las previsualizaciones viven en otro origen y por tanto
+  en otra base de datos.
+- **Por qué**: editar una versión ya publicada deja las instalaciones existentes
+  con un esquema que la aplicación cree tener pero que en ese navegador nunca se
+  aplicó. El fallo no aparece en desarrollo, donde uno borra la base y sigue, sino
+  en el dispositivo de quien llevaba tiempo usando la aplicación, que es el peor
+  sitio posible para descubrirlo.
+- **Alternativa descartada**: borrar y recrear la base cuando cambia el esquema.
+  Es trivial de implementar y destruye los datos de la persona usuaria, lo que en
+  una aplicación local primero y sin cuenta significa destruirlos sin copia.
+- **Consecuencias**: cada cambio de esquema necesita un test que abra una base de
+  datos en la versión anterior, la migre y compruebe que los datos siguen ahí.

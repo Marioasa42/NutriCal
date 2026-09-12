@@ -45,6 +45,18 @@ export default tseslint.config(
       // Interpolar un número en el mensaje de un error es intencionado y seguro.
       // El resto de tipos sigue prohibido dentro de una plantilla de cadena.
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+
+      // Un guion bajo delante del nombre significa "lo descarto a propósito".
+      // Hace falta al quitar propiedades con desestructuración de resto.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          ignoreRestSiblings: true,
+        },
+      ],
     },
   },
 

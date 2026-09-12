@@ -1,8 +1,8 @@
 import { db, type NutriCalDatabase } from '@/data/db';
+import { ALIVE, fromStoredFood, toStoredFood } from '@/data/stored';
 import { asDeleted } from '@/data/tombstone';
 import type { Food } from '@/domain/food/food';
 import type { FoodId } from '@/domain/identity/ids';
-import { isAlive } from '@/domain/persistence/persisted';
 import { now, type Instant } from '@/domain/time/local-date';
 import { normalizeForSearch } from '@/shared/lib/text';
 
@@ -20,19 +20,29 @@ import { normalizeForSearch } from '@/shared/lib/text';
  */
 export function createFoodRepository(database: NutriCalDatabase) {
   return {
-    /** Inserta o reemplaza. La clave primaria es el identificador del alimento. */
+    /**
+     * Inserta o reemplaza. El texto de búsqueda se recalcula aquí, así que no
+     * puede quedar desfasado respecto al nombre o la marca.
+     */
     async save(food: Food): Promise<void> {
-      await database.foods.put(food);
+      await database.foods.put(toStoredFood(food));
     },
 
     async saveMany(foods: readonly Food[]): Promise<void> {
-      await database.foods.bulkPut([...foods]);
+      await database.foods.bulkPut(foods.map(toStoredFood));
     },
 
-    /** Devuelve el alimento solo si no está borrado. */
+    /**
+     * Devuelve el alimento solo si no está borrado. Aquí la comprobación sigue
+     * siendo en memoria porque la lectura es por clave primaria y devuelve una
+     * sola fila: no hay nada que un índice pueda ahorrar.
+     */
     async byId(id: FoodId): Promise<Food | undefined> {
-      const food = await database.foods.get(id);
-      return food !== undefined && isAlive(food) ? food : undefined;
+      const stored = await database.foods.get(id);
+      if (stored?.isDeleted !== ALIVE) {
+        return undefined;
+      }
+      return fromStoredFood(stored);
     },
 
     /**
@@ -40,24 +50,32 @@ export function createFoodRepository(database: NutriCalDatabase) {
      * las lápidas, y nada más.
      */
     async byIdIncludingDeleted(id: FoodId): Promise<Food | undefined> {
-      return database.foods.get(id);
+      const stored = await database.foods.get(id);
+      return stored === undefined ? undefined : fromStoredFood(stored);
     },
 
-    /** Búsqueda exacta por código de barras, la vía del escáner y del teclado. */
+    /**
+     * Búsqueda exacta por código de barras, la vía del escáner y del teclado.
+     * El índice compuesto devuelve directamente solo lo vivo.
+     */
     async byBarcode(barcode: string): Promise<Food | undefined> {
-      const matches = await database.foods.where('source.barcode').equals(barcode).toArray();
-      return matches.find(isAlive);
+      const stored = await database.foods
+        .where('[isDeleted+source.barcode]')
+        .equals([ALIVE, barcode])
+        .first();
+      return stored === undefined ? undefined : fromStoredFood(stored);
     },
 
     /**
      * Búsqueda por texto dentro de lo ya conocido.
      *
-     * Recorre la tabla y filtra por subcadena normalizada, en lugar de usar un
-     * índice de prefijo. El motivo es que este catálogo solo contiene los
-     * alimentos que esta persona ha consultado, así que son decenas o cientos de
-     * filas, no millones, y un índice de prefijo no encontraría "Danone" dentro
-     * de "Yogur natural Danone". Si algún día esta tabla creciera de verdad, la
-     * vía es un índice de palabras y se registrará como decisión.
+     * Recorre las filas vivas y compara contra el texto normalizado que se
+     * guardó al escribir, en lugar de usar un índice de prefijo. El motivo es que
+     * un índice de prefijo no encontraría "Danone" dentro de "Yogur natural
+     * Danone", y este catálogo solo contiene los alimentos que esta persona ha
+     * consultado, así que son decenas o cientos de filas, no millones. Si algún
+     * día esta tabla creciera de verdad, la vía es un índice de palabras y se
+     * registrará como decisión.
      */
     async searchByName(query: string, limit = 20): Promise<readonly Food[]> {
       const needle = normalizeForSearch(query);
@@ -66,32 +84,32 @@ export function createFoodRepository(database: NutriCalDatabase) {
       }
 
       const found: Food[] = [];
-      await database.foods.each((food) => {
-        if (found.length >= limit || !isAlive(food)) {
-          return;
-        }
-        const haystack = normalizeForSearch(`${food.name} ${food.brand ?? ''}`);
-        if (haystack.includes(needle)) {
-          found.push(food);
-        }
-      });
+      await database.foods
+        .where('isDeleted')
+        .equals(ALIVE)
+        .until(() => found.length >= limit, true)
+        .each((stored) => {
+          if (found.length < limit && stored.searchText.includes(needle)) {
+            found.push(fromStoredFood(stored));
+          }
+        });
 
       return found;
     },
 
     /** Borrado lógico: escribe la lápida, no elimina la fila. */
     async remove(id: FoodId, at: Instant = now()): Promise<void> {
-      const food = await database.foods.get(id);
-      if (food === undefined) {
+      const stored = await database.foods.get(id);
+      if (stored === undefined) {
         return;
       }
-      await database.foods.put(asDeleted(food, at));
+      await database.foods.put(toStoredFood(asDeleted(fromStoredFood(stored), at)));
     },
 
     /** Todo lo vivo. Pensado para diagnósticos y para el sembrado de ejemplo. */
     async all(): Promise<readonly Food[]> {
-      const foods = await database.foods.toArray();
-      return foods.filter(isAlive);
+      const stored = await database.foods.where('isDeleted').equals(ALIVE).toArray();
+      return stored.map(fromStoredFood);
     },
   };
 }

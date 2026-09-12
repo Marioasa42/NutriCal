@@ -145,5 +145,38 @@ describe('repositorio de alimentos', () => {
       const found = await foods.searchByName('a', 2);
       expect(found.length).toBeLessThanOrEqual(2);
     });
+
+    it('recalcula el texto de búsqueda al volver a guardar', async () => {
+      const food = makeFood({ name: 'Pan blanco' });
+      await foods.save(food);
+      await foods.save({ ...food, name: 'Pan de centeno' });
+
+      expect(await foods.searchByName('blanco')).toEqual([]);
+      expect((await foods.searchByName('centeno')).map((item) => item.name)).toEqual([
+        'Pan de centeno',
+      ]);
+    });
+  });
+
+  describe('frontera con el almacenamiento', () => {
+    it('lo que devuelve el repositorio no lleva campos internos de IndexedDB', async () => {
+      const apple = makeFood();
+      await foods.save(apple);
+
+      const found = await foods.byId(apple.id);
+      expect(found).toEqual(apple);
+      expect(Object.keys(found ?? {})).not.toContain('isDeleted');
+      expect(Object.keys(found ?? {})).not.toContain('searchText');
+    });
+
+    it('un alimento borrado conserva la bandera y la fecha coherentes entre sí', async () => {
+      const apple = makeFood();
+      await foods.save(apple);
+      await foods.remove(apple.id, anInstant('2026-09-13T09:00:00.000Z'));
+
+      const raw = await database.foods.get(apple.id);
+      expect(raw?.isDeleted).toBe(1);
+      expect(raw?.deletedAt).toBe('2026-09-13T09:00:00.000Z');
+    });
   });
 });

@@ -73,5 +73,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.node },
   },
 
+  // Las funciones serverless corren en Node, no en el navegador.
+  {
+    files: ['api/**/*.ts'],
+    languageOptions: { globals: globals.node },
+  },
+
   prettier,
 );

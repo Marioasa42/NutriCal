@@ -335,3 +335,26 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   una aplicación local primero y sin cuenta significa destruirlos sin copia.
 - **Consecuencias**: cada cambio de esquema necesita un test que abra una base de
   datos en la versión anterior, la migre y compruebe que los datos siguen ahí.
+
+## D-016 El sembrado de datos de ejemplo se adelanta al paso 2 o 3 de la fase 1
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el sembrado estaba planificado para el último paso de la fase 1,
+  junto a la pantalla del día. Pero cada previsualización de Vercel vive en su
+  propio origen, y como IndexedDB está aislada por origen, toda previsualización
+  arranca con la base de datos vacía. Una pantalla vacía es lo primero que ve
+  quien abre el enlace de un pull request o la demo del portfolio.
+- **Decisión**: el sembrado llega en el paso 2 o 3, en cuanto exista un alimento
+  que sembrar, con un botón para cargar los datos de ejemplo y otro para
+  borrarlos. Los datos sembrados son entidades normales del dominio, con sus
+  identificadores y sus lápidas, no un atajo que escriba directamente en las
+  tablas.
+- **Por qué**: adelantarlo no añade trabajo, solo lo reordena, y hace que cada
+  previsualización se pueda enseñar con contenido en lugar de con una pantalla en
+  blanco. Además obliga a que los repositorios sirvan para escribir de verdad
+  desde el primer momento, lo que es una prueba de humo de la capa de datos.
+- **Alternativa descartada**: dejarlo en el último paso, más fiel al plan pero
+  con previsualizaciones vacías durante toda la fase; y precargar datos de
+  ejemplo automáticamente al abrir la aplicación, que mezcla datos falsos con los
+  de la persona usuaria sin que lo haya pedido.

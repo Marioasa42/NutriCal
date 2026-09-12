@@ -4,6 +4,8 @@ Aplicación web progresiva para registrar comidas y ejercicio, con seguimiento d
 calorías, macronutrientes y micronutrientes. Funciona sin conexión y sin necesidad
 de crear una cuenta. Los objetivos diarios son totalmente editables.
 
+**Demo:** https://nutri-cal-git-main-marioasa42-8732.vercel.app/
+
 > **Esto no es consejo médico.** NutriCal es una herramienta de registro personal.
 > No sustituye la valoración de un profesional sanitario.
 

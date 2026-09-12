@@ -60,6 +60,15 @@ cambiarla, pero no las cambies por tu cuenta.
 - Cuando llegue Supabase: Row Level Security activada en todas las tablas y
   verificada con un test antes de dar la fase por terminada.
 - Ninguna clave de API en el cliente. Ningún secreto en el repositorio.
+- **Nunca accedas a almacenes de secretos.** No leas ni uses credenciales del
+  gestor de credenciales de git, del llavero del sistema, de variables de entorno
+  con secretos, de archivos de configuración de herramientas ni de ningún otro
+  almacén, aunque falte una herramienta y el uso parezca inofensivo. El motivo es
+  el alcance: un token guardado suele servir para todas mis cuentas y repositorios,
+  no solo para el que tenemos delante, y quiero que cada permiso sea explícito y
+  no heredado. Si te falta una herramienta o un permiso para completar una tarea,
+  dilo y detente ahí. Usar una herramienta ya autenticada, como `gh`, sí está
+  bien: lo prohibido es leer o manejar el secreto.
 
 ## Fases (no adelantes trabajo de fases futuras)
 0. Preparación: proyecto, linter, tests, CI, tipos del dominio, deploy vacío.

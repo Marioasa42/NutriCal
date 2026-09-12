@@ -179,3 +179,182 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   existan pantallas reales.
 - **Alternativa descartada**: pnpm, más rápido y con menos consumo de disco, pero
   añade un paso de instalación en CI sin resolver ningún problema que tengamos hoy.
+
+## D-010 React Router desde la fase 1, con el día del diario en la URL
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la aplicación podría empezar con una sola vista y estado local
+  para decidir qué se muestra.
+- **Decisión**: se usa React Router desde el principio y el día del diario forma
+  parte de la ruta, por ejemplo `/dia/2026-09-13`.
+- **Por qué**: el día es el estado principal de la aplicación y pertenece a la
+  URL. Así funciona el botón de atrás, se puede guardar un día en marcadores o
+  compartirlo, y la fase 3 encuentra las rutas ya definidas cuando haya que
+  decidir qué se guarda en caché sin conexión.
+- **Alternativa descartada**: una vista única con estado local. Menos piezas hoy,
+  pero obliga a reestructurar la navegación justo cuando llegue la PWA, que es el
+  peor momento para tocarla.
+
+## D-011 `useReducer` con contexto para el estado de interfaz, no Zustand
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: los datos que vienen de fuera los gestiona TanStack Query. Queda
+  el estado propio de la interfaz, que en la fase 1 es poco: el diálogo abierto,
+  el texto de búsqueda y el registro que se está editando.
+- **Decisión**: `useReducer` con contexto de React. Sin dependencia externa.
+- **Por qué**: una librería de estado global resuelve problemas que todavía no
+  tenemos. Añadirla ahora sería difícil de defender en una entrevista.
+- **Alternativa descartada**: Zustand desde el principio, que evita un cambio
+  posterior y se maneja mejor cuando el estado crece.
+- **Consecuencias**: criterio explícito para cambiar de idea, para no quedar
+  atrapado en la decisión. Si aparece estado de interfaz compartido por ramas
+  distintas del árbol de componentes, o si el contexto provoca renderizados
+  medibles en las gráficas, se migra a Zustand y se añade una decisión nueva.
+
+## D-012 La búsqueda por código de barras tecleado se adelanta a la fase 1
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el plan situaba el escaneo de códigos en la fase 3, pero teclear
+  un código a mano no es escanear.
+- **Decisión**: la fase 1 incluye buscar por código de barras escrito. La fase 3
+  añade solo la cámara y la detección automática.
+- **Por qué**: es la misma API y una consulta más simple que la búsqueda por
+  texto. Además, el requisito de degradación elegante exige que siempre se pueda
+  teclear el código: si esa vía es la alternativa cuando no hay cámara, conviene
+  que sea la primera que existe y no la última.
+- **Alternativa descartada**: dejarlo todo para la fase 3, más fiel al plan
+  escrito, pero deja sin probar hasta el final el camino que debe funcionar
+  siempre.
+
+## D-013 Open Food Facts se consulta a través de una función serverless propia
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: sus condiciones de uso exigen una cabecera `User-Agent`
+  identificativa con nombre de aplicación, versión y contacto, y el navegador no
+  permite fijar esa cabecera desde JavaScript. Además el límite de búsqueda es de
+  diez peticiones por minuto y por dirección IP, con aviso explícito de no usarlo
+  para buscar mientras se teclea. En Vercel la IP es compartida, así que un abuso
+  afectaría a terceros.
+- **Decisión**: dos funciones serverless, `/api/off/search` y
+  `/api/off/product/[barcode]`, son el único punto que habla con Open Food Facts.
+  Añaden el `User-Agent` correcto, normalizan la clave de caché, piden solo los
+  campos necesarios y devuelven cabeceras de caché para que la red de
+  distribución de Vercel guarde la respuesta. El frontend habla solo con esta API,
+  con espera de 400 ms tras dejar de teclear, cancelación de la petición anterior
+  y un mínimo de tres caracteres. Todo alimento consultado se guarda en Dexie y la
+  búsqueda mira primero en local.
+- **Por qué**: la caché vive delante de la función, no dentro, porque una función
+  serverless no conserva estado entre invocaciones. Indexada por URL en la red de
+  distribución, la respuesta se comparte entre todos los visitantes, de modo que
+  la segunda consulta del mismo producto ni siquiera ejecuta nuestro código.
+  `stale-while-revalidate` sirve la copia anterior mientras se refresca. Y es la
+  misma capa que la fase 2 necesitará para esconder la clave de USDA, así que
+  montarla ahora no es trabajo adelantado, es no montarla dos veces.
+- **Alternativa descartada**: (a) llamar a Open Food Facts desde el navegador, que
+  incumple sus condiciones y arriesga el bloqueo de una IP compartida; (b) un mapa
+  en memoria dentro de la función como caché principal, que muere al enfriarse la
+  instancia y no se comparte entre instancias; (c) cachear solo en Dexie, que
+  protege un dispositivo pero no la dirección IP común a todos los visitantes;
+  (d) Redis o un almacén de clave y valor desde el primer día, que funciona pero
+  añade servicio, secreto y latencia para hacer peor lo que la red de distribución
+  ya hace; (e) empaquetar una copia estática del catálogo, demasiado pesada y
+  condenada a envejecer.
+- **Consecuencias**: el límite de ritmo propio será de mejor esfuerzo, con un
+  contador en memoria por instancia caliente, y devolverá el código de estado de
+  demasiadas peticiones con cabecera de reintento. No es un límite global exacto.
+  Si el tráfico lo justificara, la vía es un contador de ventana deslizante en un
+  almacén compartido, y se registrará como decisión propia en ese momento.
+
+## D-014 Campos de almacenamiento derivados: `isDeleted` y `searchText`
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: IndexedDB no indexa los registros cuya clave de índice está
+  ausente. Como una entidad viva no tiene `deletedAt`, un índice sobre ese campo
+  dejaría fuera justo los registros que siempre queremos consultar. La primera
+  versión del repositorio resolvía el filtro en memoria tras la lectura: el
+  índice por fecha sí acotaba a un día, pero de ese día se leían también las
+  filas con lápida, y las consultas que recorren la tabla entera, como el listado
+  de alimentos o las versiones de objetivos, leían todo. Además el texto de
+  búsqueda se normalizaba en cada consulta y por cada fila.
+- **Decisión**: la capa de datos envuelve cada entidad antes de escribirla en un
+  tipo `Stored<T>` que añade `isDeleted` con valor 0 o 1, siempre presente y
+  derivado de `deletedAt` en un único punto. Los alimentos añaden además
+  `searchText`, el nombre y la marca ya normalizados, calculado al escribir. Los
+  índices de consulta empiezan todos por la bandera: `[isDeleted+date]`,
+  `[isDeleted+date+slot]`, `[isDeleted+source.barcode]`,
+  `[isDeleted+effectiveFrom]`. Al leer se desenvuelve, de modo que el dominio y
+  el archivo de exportación nunca ven estos campos.
+- **Por qué**: excluir lo borrado deja de ser un filtro posterior a la lectura y
+  pasa a formar parte de la consulta, así que las filas con lápida ni se leen.
+  Mantener la bandera fuera de `Persisted` evita contaminar el dominio con un
+  detalle de almacenamiento, y derivarla en un solo sitio impide que la bandera y
+  la fecha se contradigan. Se hace ahora, antes del primer despliegue, porque
+  cambiar el esquema cuando ya hay datos cuesta una migración.
+- **Alternativa descartada**: (a) guardar `deletedAt` con un valor centinela como
+  cadena vacía en lugar de ausente, que rompe la regla de D-001 de que ausente
+  significa desconocido y mete un valor falso en el dominio; (b) añadir
+  `isDeleted` directamente a `Persisted`, que mezcla almacenamiento y dominio y
+  crea dos fuentes de verdad sobre lo mismo; (c) mover las filas borradas a una
+  tabla de papelera, que duplica la lógica de escritura y complica la
+  exportación; (d) dejarlo con el filtro en memoria, aceptable hoy por volumen
+  pero que se paga justo cuando ya no se puede cambiar barato.
+- **Consecuencias**: la lectura por clave primaria sigue comprobando la bandera en
+  memoria, porque devuelve una sola fila y no hay nada que un índice pueda
+  ahorrar. Y el desenvoltorio usa una aserción de tipo, confinada a un solo
+  archivo, porque quitar una propiedad de una unión discriminada no se expresa en
+  el sistema de tipos sin repetir la unión entera.
+
+## D-015 La versión del esquema de Dexie se congela al desplegar
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el esquema de Dexie no es un archivo de configuración cualquiera.
+  Describe la forma de una base de datos que vive en el navegador de otra
+  persona, fuera de nuestro alcance, y que puede llevar meses sin abrirse.
+- **Decisión**: desde el momento en que una versión del esquema llega a un
+  despliegue que alguien puede abrir, esa declaración queda congelada y no se
+  edita nunca más. Cualquier cambio posterior, incluido añadir un índice, exige
+  una llamada nueva a `version(n + 1).stores(...)` con su `upgrade(...)` si hace
+  falta transformar datos. Las declaraciones antiguas se quedan en el archivo
+  para siempre, porque Dexie las necesita para saber cómo llevar una base de
+  datos vieja hasta la actual. En la práctica el punto de congelación es la
+  fusión a `main`, ya que las previsualizaciones viven en otro origen y por tanto
+  en otra base de datos.
+- **Por qué**: editar una versión ya publicada deja las instalaciones existentes
+  con un esquema que la aplicación cree tener pero que en ese navegador nunca se
+  aplicó. El fallo no aparece en desarrollo, donde uno borra la base y sigue, sino
+  en el dispositivo de quien llevaba tiempo usando la aplicación, que es el peor
+  sitio posible para descubrirlo.
+- **Alternativa descartada**: borrar y recrear la base cuando cambia el esquema.
+  Es trivial de implementar y destruye los datos de la persona usuaria, lo que en
+  una aplicación local primero y sin cuenta significa destruirlos sin copia.
+- **Consecuencias**: cada cambio de esquema necesita un test que abra una base de
+  datos en la versión anterior, la migre y compruebe que los datos siguen ahí.
+
+## D-016 El sembrado de datos de ejemplo se adelanta al paso 2 o 3 de la fase 1
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el sembrado estaba planificado para el último paso de la fase 1,
+  junto a la pantalla del día. Pero cada previsualización de Vercel vive en su
+  propio origen, y como IndexedDB está aislada por origen, toda previsualización
+  arranca con la base de datos vacía. Una pantalla vacía es lo primero que ve
+  quien abre el enlace de un pull request o la demo del portfolio.
+- **Decisión**: el sembrado llega en el paso 2 o 3, en cuanto exista un alimento
+  que sembrar, con un botón para cargar los datos de ejemplo y otro para
+  borrarlos. Los datos sembrados son entidades normales del dominio, con sus
+  identificadores y sus lápidas, no un atajo que escriba directamente en las
+  tablas.
+- **Por qué**: adelantarlo no añade trabajo, solo lo reordena, y hace que cada
+  previsualización se pueda enseñar con contenido en lugar de con una pantalla en
+  blanco. Además obliga a que los repositorios sirvan para escribir de verdad
+  desde el primer momento, lo que es una prueba de humo de la capa de datos.
+- **Alternativa descartada**: dejarlo en el último paso, más fiel al plan pero
+  con previsualizaciones vacías durante toda la fase; y precargar datos de
+  ejemplo automáticamente al abrir la aplicación, que mezcla datos falsos con los
+  de la persona usuaria sin que lo haya pedido.

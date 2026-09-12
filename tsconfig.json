@@ -1,4 +1,50 @@
 {
+  /*
+   * Punto de entrada de `tsc -b` y, sobre todo, el archivo que leen las
+   * herramientas externas.
+   *
+   * `files: []` con `references` es el patrón de solución: sirve para construir
+   * varios proyectos de una vez y no compila nada por sí mismo. El problema es
+   * que antes este archivo no declaraba ninguna opción de compilación, así que
+   * cualquier herramienta que lo lea para saber cómo compilar la carpeta `api`
+   * (Vercel al construir las funciones serverless) encontraba un archivo vacío y
+   * caía en sus propios valores por defecto, con una biblioteca anterior a
+   * ES2022. Ver la decisión D-017.
+   *
+   * Por eso las opciones de las funciones serverless viven AQUÍ, y
+   * `tsconfig.api.json` las hereda con `extends` en lugar de repetirlas. Así no
+   * pueden separarse: lo que comprueba el CI es literalmente lo mismo que lee
+   * Vercel.
+   */
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Las funciones serverless corren como módulos de Node, no pasan por Vite.
+       Por eso las importaciones relativas llevan extensión `.js`: es la ruta del
+       archivo que existirá en tiempo de ejecución. */
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* El mismo rigor que en la aplicación. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
   "files": [],
-  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.api.json" }
+  ]
 }

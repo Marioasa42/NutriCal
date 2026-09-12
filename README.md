@@ -79,9 +79,20 @@ src/
     persistence/   Campos comunes de toda entidad guardada, incluida la lápida.
     transfer/      Formato del archivo de exportación.
   features/      Un caso de uso por carpeta, con su interfaz, su estado y sus datos.
+  data/          Dexie y repositorios. Envuelve y desenvuelve las entidades.
   shared/        Lo que no tiene un dueño claro: componentes y utilidades comunes.
   app/           Arranque, rutas, providers y layout.
+
+api/             Funciones serverless de Vercel. Proyecto de TypeScript aparte.
+  _lib/          Lógica probable: URLs, caché, límite de ritmo, handlers.
+  off/           Rutas públicas: búsqueda y producto de Open Food Facts.
 ```
+
+La carpeta `api` no importa nada de `src`. Es otro desplegable, con otro entorno
+de ejecución y su propio `tsconfig`. El intermediario existe porque Open Food
+Facts exige una cabecera de identificación que el navegador no deja fijar, y
+porque su límite de peticiones es por dirección IP y en Vercel esa dirección se
+comparte. Ver `DECISIONS.md`, entrada D-013.
 
 El motivo es que el trabajo llega por funcionalidad, no por tipo de archivo.
 Añadir el escaneo de códigos de barras toca una carpeta, no cinco repartidas por

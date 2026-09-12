@@ -1,0 +1,14 @@
+{
+  /*
+   * Proyecto de las funciones serverless.
+   *
+   * No declara ni una sola opción de compilación propia más allá del archivo de
+   * caché: las hereda todas de `tsconfig.json`, que es el que lee Vercel. Si
+   * alguna vez hace falta añadir una opción aquí, va antes en la raíz.
+   */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.api.tsbuildinfo"
+  },
+  "include": ["api"]
+}

@@ -41,6 +41,14 @@ jobs:
       - name: Comprobación de tipos
         run: npm run typecheck
 
+      # Paso aparte a propósito, aunque `tsc -b` ya construya este proyecto. Si
+      # alguien quita la referencia a tsconfig.api.json de la raíz, el paso de
+      # arriba dejaría de mirar la carpeta api sin decir nada y la CI seguiría
+      # en verde. Este paso compila las funciones serverless de forma explícita,
+      # con las mismas opciones que lee Vercel. Ver la decisión D-017.
+      - name: Comprobación de tipos de las funciones serverless
+        run: npm run typecheck:api
+
       - name: Tests
         run: npm test
 

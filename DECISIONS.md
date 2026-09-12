@@ -358,3 +358,42 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   con previsualizaciones vacías durante toda la fase; y precargar datos de
   ejemplo automáticamente al abrir la aplicación, que mezcla datos falsos con los
   de la persona usuaria sin que lo haya pedido.
+
+## D-017 La comprobación de tipos cubre los dos proyectos, y las opciones viven en la raíz
+- **Fecha**: 2026-09-12
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el proyecto tiene dos compilaciones de TypeScript distintas, la
+  aplicación del navegador y las funciones serverless. `tsconfig.json` seguía el
+  patrón de solución: `files: []` más referencias, sin ninguna opción de
+  compilación propia. Con esa forma, `tsc -b` compilaba las tres partes con sus
+  opciones correctas y la integración continua daba verde, pero Vercel no conoce
+  `tsconfig.api.json`: lee `tsconfig.json`, no encontraba opciones y caía en sus
+  propios valores por defecto, con una biblioteca anterior a ES2022. El
+  despliegue falló por `Array.prototype.at`, que en nuestra configuración existía
+  sin problema. Dos comprobaciones de los mismos archivos con opciones distintas,
+  y solo una se ejecutaba antes de desplegar.
+- **Decisión**: las opciones de compilación de las funciones serverless viven en
+  `tsconfig.json`, que es el archivo que leen las herramientas externas.
+  `tsconfig.api.json` las hereda con `extends` y no declara ninguna propia salvo
+  la ruta del archivo de caché. La integración continua ejecuta además un paso
+  explícito `typecheck:api`, y un test de contrato comprueba que la raíz declare
+  target y biblioteca de ES2022 o posterior, que mantenga el rigor del resto del
+  proyecto y que el proyecto de la API no reintroduzca opciones propias.
+- **Por qué**: el fallo no fue que faltara una comprobación, sino que había dos
+  fuentes de verdad para la misma compilación. Con `extends`, lo que verifica la
+  integración continua es literalmente lo mismo que compila Vercel, así que la
+  divergencia deja de ser posible. El paso explícito cubre el otro agujero: si
+  alguien quita la referencia de la raíz, `tsc -b` dejaría de mirar la carpeta
+  `api` en silencio.
+- **Alternativa descartada**: (a) evitar `Array.prototype.at` y usar indexación
+  manual, que arregla este error concreto y deja el problema de fondo intacto
+  para el siguiente método de ES2022 que se use; (b) duplicar las opciones en la
+  raíz y en el proyecto de la API, que es justo la divergencia que causó el
+  fallo; (c) convertir la aplicación en proyecto compuesto para que la raíz
+  pudiera tener archivos propios y referencias a la vez, lo que obliga a emitir
+  declaraciones en un proyecto que solo comprueba tipos.
+- **Consecuencias**: cualquier opción nueva para las funciones serverless se
+  añade en la raíz, nunca en `tsconfig.api.json`. Y toda comprobación que deba
+  proteger un despliegue tiene que ejecutarse con la misma configuración que usa
+  ese despliegue, no con una equivalente.

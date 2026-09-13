@@ -4,6 +4,7 @@ import { DayPage } from '@/app/routes/DayPage';
 import { NotFoundPage } from '@/app/routes/NotFoundPage';
 import { RootLayout } from '@/app/routes/RootLayout';
 import { TodayRedirect } from '@/app/routes/TodayRedirect';
+import { BarcodePage } from '@/features/food-search/BarcodePage';
 import { SearchPage } from '@/features/food-search/SearchPage';
 
 /**
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
       { index: true, Component: TodayRedirect },
       { path: 'dia/:date', Component: DayPage },
       { path: 'dia/:date/buscar', Component: SearchPage },
+      { path: 'dia/:date/codigo/:barcode', Component: BarcodePage },
       { path: '*', Component: NotFoundPage },
     ],
   },

@@ -10,6 +10,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Las funciones serverless importan esta misma carpeta con una ruta
+      // relativa y extensión `.js`, porque corren como módulos de Node y no
+      // pasan por aquí. El alias es solo comodidad del lado del navegador.
+      '@contracts': fileURLToPath(new URL('./contracts', import.meta.url)),
     },
   },
   test: {

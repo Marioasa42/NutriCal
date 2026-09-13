@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 
 import { InvalidDate } from '@/app/routes/InvalidDate';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
+import { BarcodeField } from '@/features/food-search/BarcodeField';
 import { SearchResults } from '@/features/food-search/SearchResults';
 import {
   EmptyState,
@@ -86,6 +87,8 @@ function Search({ date }: { date: LocalDate }) {
       <SearchField value={text} onChange={setText} busy={isRefreshing} />
 
       {renderState()}
+
+      <BarcodeField date={date} />
     </div>
   );
 

@@ -32,6 +32,23 @@ export function localDate(value: string): LocalDate {
   return value as LocalDate;
 }
 
+/**
+ * Valida y marca una cadena `YYYY-MM-DD`, o devuelve `undefined` si no lo es.
+ *
+ * Es la hermana no lanzadora de `localDate`, y existe por la misma razón que
+ * `resolvePortion` devuelve una unión en vez de lanzar (D-025): esto se usa con
+ * texto que no ha escrito la aplicación. Un parámetro de la URL lo teclea
+ * cualquiera, y `/dia/patata` no es un fallo de programación que deba tumbar la
+ * pantalla, es una dirección mal escrita a la que hay que responder algo.
+ *
+ * Aquí basta con `undefined` y no hace falta una unión de tres ramas como la de
+ * D-025, porque solo hay dos respuestas posibles y ninguna necesita explicarse:
+ * la fecha vale o no vale. `localDate` se queda como está, con sus dos mensajes
+ * distintos, para los sitios donde un valor inválido sí sería un error nuestro.
+ */
+export const tryLocalDate = (value: string): LocalDate | undefined =>
+  LOCAL_DATE_PATTERN.test(value) && isRealCalendarDate(value) ? (value as LocalDate) : undefined;
+
 /** Valida y marca un instante ISO 8601. */
 export function instant(value: string): Instant {
   const parsed = new Date(value);

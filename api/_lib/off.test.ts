@@ -3,14 +3,7 @@ import { describe, expect, it } from 'vitest';
 // Único punto donde el proyecto de la API mira dentro del frontend, y es un
 // test: sirve precisamente para vigilar que las dos copias no se separen.
 import { normalizeForSearch as normalizeInApp } from '../../src/shared/lib/text.js';
-import {
-  USER_AGENT,
-  buildProductUrl,
-  buildSearchUrl,
-  isValidBarcode,
-  normalizeQuery,
-  parsePage,
-} from './off.js';
+import { USER_AGENT, buildProductUrl, buildSearchUrl, normalizeQuery, parsePage } from './off.js';
 import { normalizeForSearch as normalizeInApi } from './text.js';
 
 describe('identificación ante Open Food Facts', () => {
@@ -22,29 +15,6 @@ describe('identificación ante Open Food Facts', () => {
 
   it('no incluye ningún correo personal', () => {
     expect(USER_AGENT).not.toMatch(/@/);
-  });
-});
-
-describe('validación del código de barras', () => {
-  it('acepta códigos de entre 8 y 14 dígitos', () => {
-    expect(isValidBarcode('12345678')).toBe(true);
-    expect(isValidBarcode('8410128750121')).toBe(true);
-    expect(isValidBarcode('12345678901234')).toBe(true);
-  });
-
-  it('rechaza longitudes fuera de rango', () => {
-    expect(isValidBarcode('1234567')).toBe(false);
-    expect(isValidBarcode('123456789012345')).toBe(false);
-    expect(isValidBarcode('')).toBe(false);
-  });
-
-  it('rechaza cualquier cosa que no sean dígitos', () => {
-    // Sin esta validación, texto arbitrario acabaría dentro de la ruta de una
-    // petición saliente.
-    expect(isValidBarcode('841012875012a')).toBe(false);
-    expect(isValidBarcode('../../etc/passwd')).toBe(false);
-    expect(isValidBarcode('8410128750121?x=1')).toBe(false);
-    expect(isValidBarcode('841 012 875')).toBe(false);
   });
 });
 

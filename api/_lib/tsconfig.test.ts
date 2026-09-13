@@ -87,8 +87,13 @@ describe('tsconfig.api.json', () => {
     expect(Object.keys(apiOptions ?? {})).toEqual(['tsBuildInfoFile']);
   });
 
-  it('apunta a la carpeta de las funciones', () => {
-    expect(api.include).toEqual(['api']);
+  it('apunta a la carpeta de las funciones y al contrato compartido', () => {
+    // `contracts` está aquí a propósito: es la carpeta de las reglas que el
+    // cliente y el servidor tienen que cumplir igual, y el proyecto de la API
+    // la comprueba con SU resolución de módulos, la de Node. La aplicación la
+    // incluye también con la suya. Que las dos la compilen es lo que garantiza
+    // que un archivo del contrato sigue siendo consumible por las dos puntas.
+    expect(api.include).toEqual(['api', 'contracts']);
   });
 });
 

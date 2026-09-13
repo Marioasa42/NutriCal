@@ -46,14 +46,15 @@ export const MIN_QUERY_LENGTH = 3;
 export const UPSTREAM_TIMEOUT_MS = 5000;
 
 /**
- * Un código de barras es solo dígitos, entre 8 y 14.
+ * La validación del código de barras se reexporta desde `contracts/`, que es
+ * donde vive ahora la única definición.
  *
- * Validar antes de construir la URL no es una formalidad: sin esto, cualquier
+ * Se reexporta en lugar de obligar a `handlers.ts` a importar de dos sitios:
+ * para quien lee los manejadores, la regla sigue llegando de donde llegaba. Y
+ * validar antes de construir la URL no es una formalidad, sin esto cualquier
  * texto acabaría dentro de la ruta de una petición saliente.
  */
-export function isValidBarcode(value: string): boolean {
-  return /^\d{8,14}$/.test(value);
-}
+export { isValidBarcode } from '../../contracts/barcode.js';
 
 /** Normaliza la consulta para que dos escrituras equivalentes compartan caché. */
 export function normalizeQuery(value: string): string {

@@ -30,8 +30,9 @@
        Sin `baseUrl`, que TypeScript 6 marca como obsoleto: las rutas de `paths`
        se resuelven desde la carpeta de este propio tsconfig. */
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@contracts/*": ["./contracts/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "contracts"]
 }

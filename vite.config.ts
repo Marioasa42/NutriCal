@@ -10,13 +10,22 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Las funciones serverless importan esta misma carpeta con una ruta
+      // relativa y extensión `.js`, porque corren como módulos de Node y no
+      // pasan por aquí. El alias es solo comodidad del lado del navegador.
+      '@contracts': fileURLToPath(new URL('./contracts', import.meta.url)),
     },
   },
   test: {
     // El dominio es código puro: no necesita DOM. Cuando la fase 1 traiga
     // componentes, se añadirá un entorno jsdom solo para esos archivos.
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'api/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'api/**/*.test.ts',
+      'contracts/**/*.test.ts',
+    ],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     // La zona horaria se fija a UTC a propósito. Sin esto, la suite hereda la

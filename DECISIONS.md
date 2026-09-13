@@ -821,3 +821,93 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   que se enseñen con `unknown` mayor que cero siguen necesitando su recuento al
   lado (D-026): el formato decide cómo se escribe el número, no si el número
   puede ir solo.
+
+## D-031 `contracts/`: las reglas que el cliente y el servidor cumplen igual viven una sola vez
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la validación del código de barras, entre 8 y 14 dígitos, vivía
+  en `api/_lib/off.ts`. El cliente necesita la misma regla para no gastar una
+  petición en algo que el servidor va a rechazar, y el proyecto ya tenía un
+  precedente para ese problema: `normalizeForSearch` está copiada en
+  `api/_lib/text.ts` y en `src/shared/lib/text.ts`, con un test que compara las
+  dos implementaciones para que no se separen.
+- **Decisión**: una carpeta nueva en la raíz, `contracts/`, hermana de `src/` y
+  de `api/`, con `contracts/barcode.ts` como primer habitante. Los dos proyectos
+  de TypeScript la incluyen y la compilan, cada uno con su resolución de módulos:
+  la de Node en el de la API, que la importa con ruta relativa y extensión
+  `.js`, y la de empaquetador en el de la aplicación, que la importa con el
+  alias `@contracts/`. El nombre no es `shared` porque ya existe
+  `src/shared/`, y dos carpetas iguales a distinta altura es una trampa para
+  quien lea el repositorio dentro de seis meses.
+- **Alcance, y esto es la mitad de la decisión**: `contracts/` es solo para
+  reglas que el cliente y el servidor tienen que cumplir de forma idéntica.
+  Nunca un cajón de utilidades compartidas. La prueba para admitir algo aquí es
+  concreta: si las dos copias se separasen, ¿se rompería el trato entre las dos
+  puntas? Si la respuesta es no, no entra. Sin esta frase, dentro de tres meses
+  la carpeta tendría media biblioteca dentro.
+- **Por qué**: el criterio anterior, escrito en la cabecera de
+  `api/_lib/text.ts`, decía que la función serverless no debe depender del
+  código del navegador. Sigue siendo cierto y esta decisión lo respeta:
+  `contracts/` no es código del navegador. Lo que le pasaba a ese criterio es
+  que estaba incompleto, no que fuera erróneo: contemplaba dos ubicaciones
+  posibles, la del cliente y la del servidor, y había una tercera que no
+  pertenece a ninguna de las dos puntas. Con dos copias, el día que una cambiara
+  el cliente gastaría peticiones que el servidor rechaza, o dejaría de mandar
+  códigos que el servidor sí acepta, y ninguno de los dos fallos se ve al
+  probar cada lado por separado.
+- **Alternativa descartada**: (a) dos copias con un test que las compare, que es
+  el precedente y funciona, pero paga con un test permanente lo que aquí se
+  arregla con un archivo; (b) poner el archivo dentro de `api/_lib/` y que el
+  navegador importe de ahí, que no tiene riesgo de despliegue y es verificable
+  en local, pero invierte la dirección de las dependencias y deja el frontend
+  colgando de la carpeta del servidor; (c) publicar el contrato como paquete de
+  espacio de trabajo, que resuelve lo mismo y añade un gestor de monorrepo a un
+  proyecto con dos carpetas.
+- **Consecuencias**: la incógnita es Vercel, y conviene dejarla escrita. Su
+  empaquetado de las funciones tiene que seguir una importación relativa que sale
+  de `api/`, y D-017 existe justamente porque una vez dimos por hecho que Vercel
+  se comportaba como la integración continua. La verificación es el despliegue de
+  vista previa del pull request; si fallara, la salida es `includeFiles` en
+  `vercel.json` y, si tampoco, volver a las dos copias. `normalizeForSearch`
+  sigue duplicada de momento, a propósito: se migra en un cambio aparte, para
+  que si la vista previa falla lo haga por una sola cosa. El comentario de
+  `api/_lib/text.ts` queda pendiente de actualizar en esa migración.
+
+## D-032 La resolución de un código de barras es una ruta, y esa ruta es el único punto de entrada
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-012 adelantó a la fase 1 la búsqueda por código de barras
+  tecleado, dejando para la fase 3 solo la cámara y la detección automática.
+  Eso obliga a decidir hoy la forma que tendrá que reutilizar el escáner mañana.
+- **Decisión**: resolver un código es una pantalla con dirección propia,
+  `/dia/:date/codigo/:barcode`. El formulario donde se teclea no resuelve nada:
+  normaliza lo escrito y navega. En la fase 3, el escáner detectará una cadena y
+  navegará a la misma ruta, sin tocar la pantalla de destino, ni el hook, ni las
+  ramas de resultado. La pantalla tiene ocho ramas, y tres son suyas: `invalid`,
+  que aplica la regla de D-031 sin gastar petición; `notFound`, que es un código
+  que la fuente no conoce; y `unreadable`, que es un producto que la fuente
+  devuelve roto.
+- **Por qué**: quien produce un código de barras no debe saber qué pasa después.
+  Con una función a la que se llama, el escáner de la fase 3 tendría que conocer
+  el estado interno de la pantalla de búsqueda; con una dirección, solo tiene que
+  producir una cadena. De regalo, el resultado se puede recargar y compartir, y
+  el botón de atrás vuelve a la búsqueda. Y el requisito de degradación elegante
+  queda cumplido por orden de construcción: teclear el código es el camino que
+  existe primero, así que la cámara será un atajo hacia él y no una vía paralela
+  que haya que mantener aparte.
+- **Alternativa descartada**: (a) un diálogo con el código en estado de memoria,
+  que es lo que primero apetece: no tiene URL, no se recarga ni se comparte, y
+  ata la cámara al estado interno de otra pantalla; (b) reutilizar la ruta de
+  búsqueda detectando que el texto son solo dígitos, que mezcla dos consultas
+  distintas en una y deja sin explicar por qué "12345678" no busca por nombre;
+  (c) juntar `notFound` y `unreadable` en un solo mensaje, que tira la
+  distinción que `services/off` viene haciendo desde el paso 2b y que existe
+  precisamente porque la interfaz responde distinto a cada una.
+- **Consecuencias**: la fase 3 añade la cámara al lado del campo tecleado y
+  llama a `navigate` con lo que detecte. No debería tocar nada de lo escrito
+  aquí; si acaba teniendo que tocarlo, esta decisión estaba mal y hay que
+  registrar por qué. El dígito de control no se comprueba y el motivo está en
+  `contracts/barcode.ts`: el rango cubre esquemas que no lo calculan igual, y
+  Open Food Facts contiene códigos internos de tienda que no cumplen ninguno.

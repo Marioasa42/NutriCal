@@ -642,3 +642,46 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   fase 3 escriba el importador, la validación de Zod tiene que reconstruir las
   magnitudes con esos constructores y no afirmar la marca sobre un número crudo,
   o esa garantía se pierde.
+
+## D-026 Un nutriente con `unknown` mayor que cero nunca se enseña como una cifra a secas
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-001 dijo de pasada que los totales diarios deben informar de
+  cuántos registros no aportaban cada nutriente. D-024 decidió la mitad
+  aritmética: se suma lo que hay y el total viaja con `unknown`, el recuento de
+  los registros que no aportaban el dato. Ninguna de las dos dice qué obliga eso
+  a la interfaz, y sin esa parte el recuento existe en el modelo y no llega a la
+  pantalla, que es donde tenía que servir para algo.
+- **Decisión**: siempre que se muestre un nutriente cuyo `unknown` sea mayor que
+  cero, junto a la cifra tiene que verse sobre cuántos registros se calculó. Una
+  cifra sola, sin esa marca, es un error de presentación y no una cuestión de
+  gusto. La marca es responsabilidad del componente que enseña el nutriente, no
+  de quien lo llama: quien pinta la cifra recibe el recuento y decide, para que
+  una pantalla nueva no pueda olvidarse de ponerla. Se aplica igual a las macros
+  opcionales de la fase 1 (fibra, azúcares, grasa saturada, sal) que al panel de
+  micronutrientes de la fase 2, y también a cualquier cifra que salga de la
+  aplicación hacia fuera. Las cuatro macros obligatorias no entran nunca aquí,
+  porque `Macros` es estricto y no pueden aparecer en `unknown` (D-002, D-024).
+- **Por qué**: un total con `unknown` mayor que cero es un mínimo conocido, no un
+  total. Enseñarlo igual que uno completo lo convierte en un total a los ojos de
+  quien lo lee, y entonces la decisión de D-024 se vuelve en contra: sumar solo
+  lo que hay produce un número más bajo que el real, y sin la marca ese número
+  bajo parece exacto. Es peor que sumar ceros por lo que falta, que era la opción
+  que D-024 descartó por producir "un número indistinguible de un total
+  completo". Sin esta regla llegamos por la ruta larga al mismo sitio que
+  queríamos evitar.
+- **Alternativa descartada**: (a) dejarlo como criterio de diseño no escrito, que
+  es exactamente lo que ya falló una vez: D-001 lo mencionó dentro de otra
+  entrada y hubo que volver a decidirlo entero en D-024; (b) esconder el
+  nutriente cuando `unknown` sea mayor que cero, que es la opción (a) de D-024
+  disfrazada de presentación y dejaría casi todos los micronutrientes en blanco;
+  (c) enseñar la cifra y poner el recuento solo en un detalle desplegable, que
+  hace que el número engañe a quien no despliega, que son casi todos.
+- **Consecuencias**: la interfaz necesita un componente compartido para enseñar
+  un nutriente, porque la regla no se puede cumplir a base de acordarse en cada
+  sitio. Cuando llegue el panel de la fase 2, ninguna barra puede dibujarse sin
+  su recuento. Queda pendiente y se decidirá aparte la forma concreta de la
+  marca: si el recuento se enseña como "sobre 3 de 5 registros", como un signo
+  junto a la cifra, o de otra manera. Lo que esta decisión fija es que tiene que
+  estar, no cómo se ve.

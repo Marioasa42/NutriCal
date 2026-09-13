@@ -550,3 +550,95 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   pierde. Hay un test que lo fija. Y el orden en que se miran `quantity` y
   `serving_size` también decide ahora, cosa que antes solo ocurría si uno de los
   dos hablaba de volumen; también tiene su test.
+
+## D-023 El dominio no redondea; el redondeo es de presentación y ocurre una sola vez
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: escalar una porción produce decimales largos casi siempre. Media
+  manzana son 91 g y eso da 47,32 kcal; un tercio de ración da 60,666... g. La
+  tentación es redondear en el escalado, porque el número feo nace ahí.
+- **Decisión**: ni el escalado ni la suma redondean. Los totales viajan con todos
+  sus decimales y el redondeo se aplica en la capa de presentación, una sola vez,
+  sobre la cifra que se va a enseñar.
+- **Por qué**: redondear en el dominio hace que el total de un día dependa de en
+  cuántos trozos se calculó. Tres registros de 33,3 kcal redondeados a 33 suman
+  99; sin redondear suman 99,9 y se enseñan como 100. El segundo número es el
+  correcto, y el primero además cambia si mañana se parte la comida en dos
+  registros en vez de uno. Es la misma razón por la que las unidades canónicas
+  viven en el dominio y la conversión vive en la presentación: el cálculo se hace
+  con la cifra exacta y el formato se decide al final.
+- **Alternativa descartada**: (a) redondear a dos decimales en el escalado, que
+  parece inofensivo y mete el error de agrupación descrito arriba; (b) trabajar
+  con enteros en centésimas, al estilo de los céntimos en dinero, que elimina el
+  error de la coma flotante pero obliga a convertir en cada lectura y escritura y
+  resuelve un problema que en nutrición no tenemos: aquí nadie cuadra un balance
+  al céntimo, y una décima de gramo de fibra no le importa a nadie.
+- **Consecuencias**: los tests del dominio comparan con `toBeCloseTo` cuando el
+  resultado no es exacto en binario, y nunca con una cifra ya redondeada. Cuando
+  llegue la interfaz habrá que decidir con cuántos decimales se enseña cada
+  nutriente, y esa decisión se registrará aparte.
+
+## D-024 Un nutriente que solo aportan algunos registros se suma igual, y el total viaja con el recuento
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-001 dejó dicho que los totales diarios deben informar de
+  cuántos registros no aportaban cada nutriente, pero no qué se hace con la suma
+  mientras tanto. Si dos de tus cinco comidas traen fibra, hay tres respuestas
+  posibles: sumar las dos, no enseñar nada, o sumar tratando las otras tres como
+  cero.
+- **Decisión**: se suman las que hay, el resultado se devuelve, y junto a él va
+  `unknown`, un recuento de cuántos registros no aportaban ese nutriente. Un
+  nutriente que no aporta nadie se omite del total y aparece en el recuento con
+  el número total de registros. Un cero declarado cuenta como dato conocido y no
+  entra nunca en el recuento. Las cuatro macros obligatorias no pueden aparecer
+  en `unknown`, porque `Macros` es estricto y ningún alimento llega a serlo sin
+  ellas (D-002).
+- **Por qué**: un mínimo conocido informa y una ausencia no. "Al menos 5 g de
+  fibra, y dos comidas sin datos" es una frase útil; una casilla vacía no lo es,
+  y "5 g de fibra" a secas es mentira. Sumar ceros por lo que falta es la única
+  opción de las tres que produce un número indistinguible de un total completo,
+  que es exactamente lo que D-001 existe para impedir.
+- **Alternativa descartada**: (a) omitir el nutriente entero si algún registro no
+  lo aporta, que en la práctica dejaría casi todos los micronutrientes en blanco,
+  porque Open Food Facts rara vez los trae todos; (b) tratar la ausencia como
+  cero, descrito arriba; (c) devolver por cada nutriente un objeto con el valor y
+  su fiabilidad, que contamina toda la aritmética posterior, que es lo mismo que
+  D-002 ya descartó para las macros.
+- **Consecuencias**: `DayTotals.unknown` es un dato de primera, no un detalle: la
+  interfaz de la fase 2, cuando dibuje el panel de micronutrientes, tiene que
+  enseñarlo junto a cada barra o el panel entero engaña.
+
+## D-025 Resolver una porción devuelve una unión discriminada, no lanza
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: `resolvePortion` traduce lo que eligió la persona usuaria a su
+  equivalencia en unidades base. Puede no poder hacerlo: el `servingId` elegido
+  puede no existir entre las raciones de la instantánea, o el número de raciones
+  puede no ser un número que se pueda servir.
+- **Decisión**: devuelve `PortionResolution`, una unión de tres ramas:
+  `resolved`, `unknownServing` e `invalidCount`. No lanza nunca.
+- **Por qué**: no es por el dato corrupto teórico, que con los datos escritos por
+  la propia aplicación no debería ocurrir. Es por la fase 3: al importar un
+  archivo JSON entra información externa que nadie de aquí ha escrito, y puede
+  traer perfectamente un `servingId` que no existe. Con una excepción, un solo
+  registro malo de un archivo importado tumbaría la pantalla del día entera; con
+  una unión, ese registro se enseña como problemático y los demás del día se
+  siguen viendo. Es el mismo aislamiento por elemento que D-019 aplica a los
+  productos de una página de búsqueda, por el mismo motivo: un fallo en un dato
+  que no controlamos no puede costarle al resto.
+- **Alternativa descartada**: (a) lanzar una excepción, descrito arriba; (b)
+  devolver `undefined`, que junta "esa ración no existe" con "ese número no vale"
+  y deja a quien llama sin poder decir cuál de las dos cosas pasó; (c) resolver a
+  cero cuando algo no cuadra, que convierte un error en un registro de cero
+  calorías que parece legítimo y falsea el día en silencio.
+- **Consecuencias**: se comprueba `count` pero no `amount`, y la asimetría es
+  deliberada: `count` es un `number` pelado que nadie ha validado nunca, mientras
+  que `amount` ya es una magnitud con marca y por tanto pasó por su constructor,
+  que rechaza lo negativo y lo no finito. Volver a comprobarlo aquí sería
+  desconfiar del sistema de tipos que el proyecto entero da por bueno. Cuando la
+  fase 3 escriba el importador, la validación de Zod tiene que reconstruir las
+  magnitudes con esos constructores y no afirmar la marca sobre un número crudo,
+  o esa garantía se pierde.

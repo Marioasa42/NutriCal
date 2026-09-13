@@ -397,3 +397,118 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   añade en la raíz, nunca en `tsconfig.api.json`. Y toda comprobación que deba
   proteger un despliegue tiene que ejecutarse con la misma configuración que usa
   ese despliegue, no con una equivalente.
+
+## D-018 Ausente, cero y basura son tres lecturas distintas en la frontera
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la decisión D-001 dice cómo se representa un nutriente
+  desconocido dentro del dominio, pero no quién decide si lo es. Esa decisión se
+  toma al leer la respuesta de Open Food Facts, que para un mismo campo envía
+  números, cadenas con coma decimal, cadenas vacías, nulos y ausencias. Y casi
+  todas las formas cómodas de escribir esa lectura destruyen justo la distinción
+  que hay que conservar: `valor || undefined` convierte un cero real en
+  desconocido, `Number(valor) || 0` convierte un desconocido en cero, y
+  `Number('')` vale cero, así que un campo que la fuente dejó en blanco se
+  convierte en un cero perfectamente creíble.
+- **Decisión**: una sola función, `parseNutrientValue`, devuelve una unión
+  discriminada de tres ramas: `value` con el número, `absent` cuando la fuente no
+  aporta el dato, y `unusable` cuando aporta algo que no es una medida. La
+  conversión de cadena a número se hace comparando antes contra una expresión
+  regular, nunca delegando en `Number`. Solo la rama `value` produce una magnitud
+  del dominio; las otras dos omiten la clave.
+- **Por qué**: el cero nunca pasa por una comprobación de veracidad, que es el
+  único punto donde se pierde la diferencia. Tres ramas y no dos porque `"N/A"` y
+  una clave ausente no son el mismo hecho: en el dominio acaban igual, pero
+  separarlas permite demostrar con un test que el dato se descartó a propósito, y
+  deja la puerta abierta a avisar de que la fuente traía basura en lugar de
+  callar. Los tests lo fijan con productos reales: la Coca-Cola Zero trae cuatro
+  ceros legítimos y ninguna clave de fibra, y el agua mineral trae exactamente lo
+  contrario, fibra a cero y la sal ausente. No hay ninguna lista de nutrientes
+  que falten siempre: se decide producto a producto.
+- **Alternativa descartada**: (a) una función que devuelva `number | undefined`,
+  que junta "no viene" con "viene mal" y no se puede probar por separado; (b)
+  dejar que Zod ponga valores por defecto con `.default(0)`, que es literalmente
+  la puerta por la que un desconocido se convierte en cero, y además silenciosa;
+  (c) normalizar todo a `null` como hace la fuente, que reintroduce las dos
+  representaciones del mismo estado que D-001 prohíbe.
+- **Consecuencias**: cualquier fuente futura, USDA incluida en la fase 2, entra
+  por este mismo lector o replica sus tres ramas. Y la energía se lee con la
+  misma regla: `energy-kcal_100g: 0` gana sobre la clave de kilojulios porque
+  cero es un valor, no una ausencia.
+
+## D-019 Validación con dos rigores: estricta nuestra envoltura, permisiva la fuente
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la respuesta que llega al navegador tiene dos capas con dueños
+  distintos. La envoltura (`query`, `page`, `count`, `products`) la escribimos
+  nosotros en `api/_lib/handlers.ts`. El producto que va dentro lo escribe Open
+  Food Facts. Aplicarles el mismo rigor es equivocarse en una de las dos.
+- **Decisión**: la envoltura se valida estricta con Zod y un desajuste lanza
+  `malformed_response`. El producto se valida con un objeto abierto y campos
+  tolerantes, y se valida uno a uno: un producto ilegible se aparta en un
+  contador y los demás de la misma página siguen su camino. Ningún esquema del
+  archivo usa `.default()`, `.catch()` ni coerción.
+- **Por qué**: si la envoltura no cuadra, el error es nuestro y tiene que doler,
+  porque nadie más lo va a encontrar. Si un producto no cuadra, el error es de la
+  fuente y no debería costarle a quien busca los otros diecinueve resultados de
+  la página. El aislamiento por producto es lo que convierte "OFF es
+  inconsistente" en un problema acotado en vez de en una búsqueda rota.
+- **Alternativa descartada**: (a) un solo esquema estricto para todo, donde un
+  producto raro tumba la búsqueda entera; (b) un solo esquema permisivo para
+  todo, que deja de detectar nuestros propios errores justo donde sí podemos
+  arreglarlos; (c) validar a mano con guardias de tipo, que es el mismo trabajo
+  escrito dos veces, una para el tipo y otra para la comprobación.
+- **Consecuencias**: se añade Zod como dependencia. Se justifica porque la
+  frontera con la red es el único sitio donde entra `unknown` en la aplicación y
+  porque el mismo esquema sirve de tipo y de comprobación; si solo hiciera falta
+  para un sitio, no entraría.
+
+## D-020 La unidad base la decide el envase, no la tabla nutricional
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: hay que decidir si un alimento es `MassFood` o `VolumeFood`, y la
+  fuente da señales que se contradicen. La Coca-Cola Zero declara
+  `nutrition_data_per: "100g"`, se envasa en `"330ml"` y su `serving_quantity` de
+  330 son mililitros.
+- **Decisión**: manda el envase. Si `quantity` o `serving_size` indican volumen,
+  el alimento es `VolumeFood`. `nutrition_data_per` se consulta solo como segunda
+  señal, para los productos que no declaran envase. Ante la duda, gramos.
+- **Por qué**: la unidad base describe el alimento, no la tabla. Lo que se envasa
+  en mililitros es un líquido y sus porciones vienen en mililitros. Si ganara la
+  tabla, ese producto quedaría declarado en gramos con una porción que en
+  realidad son mililitros: exactamente la mezcla que la decisión D-005 existe
+  para impedir, solo que colada por dentro en forma de número suelto en vez de
+  por el sistema de tipos. La diferencia entre "por 100 g" y "por 100 ml" en una
+  bebida son décimas por la densidad; la incoherencia entre la unidad base y sus
+  porciones sería un error de verdad.
+- **Alternativa descartada**: (a) hacer caso a `nutrition_data_per`, que es el
+  campo que suena correcto y produce el alimento incoherente descrito arriba;
+  (b) guardar la base declarada aparte y convertir al leer, que exige una
+  densidad por producto que la fuente no da; (c) rechazar los productos cuyas
+  señales se contradicen, que descartaría media estantería de bebidas.
+
+## D-021 El cliente lanza un error tipado; un producto que no existe no es un error
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el cliente puede fallar de siete maneras distintas, entre las
+  cinco que ya nombran nuestras funciones serverless y las dos que solo existen
+  en el navegador: quedarse sin red y recibir una respuesta que no cumple nuestro
+  propio contrato.
+- **Decisión**: una clase `OffApiError` con un campo `code`, que se lanza. Un
+  código de barras que la fuente no conoce NO viaja por ahí: es un resultado
+  normal, `{ kind: 'notFound' }`. Y una cancelación sube intacta, sin envolver.
+- **Por qué**: es lo que TanStack Query espera de forma nativa en el paso
+  siguiente, donde lo que se lanza acaba en `error` y lo que se devuelve acaba en
+  `data`. Reutilizar los códigos de `api/_lib/http.ts` hace que el frontend y las
+  funciones hablen el mismo vocabulario. La cancelación se deja pasar tal cual
+  porque cancelar no es fallar: TanStack Query reconoce el `AbortError` por el
+  nombre y envolverlo lo convertiría en un error de verdad, que además se
+  reintentaría.
+- **Alternativa descartada**: devolver una unión discriminada y no lanzar nunca.
+  El compilador obligaría a tratar cada rama, que es tentador, pero habría que
+  envolverla en un lanzador para que TanStack Query distinga éxito de fallo, y
+  acabarían conviviendo las dos formas de decir lo mismo.

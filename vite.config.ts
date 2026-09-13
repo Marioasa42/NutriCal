@@ -16,7 +16,12 @@ export default defineConfig({
     // El dominio es código puro: no necesita DOM. Cuando la fase 1 traiga
     // componentes, se añadirá un entorno jsdom solo para esos archivos.
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'api/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'api/**/*.test.ts',
+      'contracts/**/*.test.ts',
+    ],
     setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
     // La zona horaria se fija a UTC a propósito. Sin esto, la suite hereda la

@@ -10,5 +10,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.api.tsbuildinfo"
   },
-  "include": ["api"]
+  "include": ["api", "contracts"]
 }

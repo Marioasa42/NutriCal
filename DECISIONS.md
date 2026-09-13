@@ -685,3 +685,139 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   marca: si el recuento se enseña como "sobre 3 de 5 registros", como un signo
   junto a la cifra, o de otra manera. Lo que esta decisión fija es que tiene que
   estar, no cómo se ve.
+
+## D-027 Carpetas `app/` y `features/`, y el mapa de rutas en un archivo propio
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: hasta ahora solo había código sin interfaz, repartido en
+  `domain/`, `data/`, `services/` y `shared/`. La primera pantalla obliga a
+  decidir dónde vive lo que junta una vista con su lógica.
+- **Decisión**: dos carpetas nuevas. `app/` es el arranque y la navegación: los
+  proveedores, el mapa de rutas y las pantallas de marco (diario, redirección a
+  hoy, fecha inválida, 404). `features/<nombre>/` es una funcionalidad completa
+  con su pantalla, sus componentes y sus hooks, empezando por
+  `features/food-search/`. Las cuatro carpetas anteriores no se tocan, y la
+  dirección de las dependencias es de fuera hacia dentro: `features` puede
+  importar de `shared`, `services` y `domain`, y nunca al revés. El mapa de rutas
+  vive en `app/router.tsx` y en ningún otro sitio.
+- **Por qué**: agrupar por funcionalidad y no por tipo de archivo hace que
+  añadir la pantalla de micronutrientes de la fase 2 sea crear una carpeta, no
+  tocar cinco. Y el mapa de rutas en un solo archivo no es manía de ordenar: la
+  fase 3 tiene que decidir qué direcciones se guardan en caché para funcionar
+  sin conexión, y esa lista se lee de ahí; repartida entre componentes habría
+  que reconstruirla a mano y se olvidaría alguna.
+- **Alternativa descartada**: (a) carpetas por tipo, `components/`, `hooks/`,
+  `pages/`, que es lo más común y lo que peor envejece: con cinco fases, cada
+  cambio toca archivos lejanos entre sí y ninguna carpeta cuenta de qué va la
+  aplicación; (b) meter las pantallas dentro de `shared/ui`, que confundiría lo
+  reutilizable con lo que se usa una sola vez.
+- **Consecuencias**: `src/App.tsx` desaparece y pasa a `src/app/App.tsx`.
+  `vercel.json` añade la reescritura a `index.html`, sin la cual un enlace
+  directo a `/dia/2026-09-13` daría 404 en producción; excluye `/api` para no
+  tapar las funciones serverless. El día que una funcionalidad necesite algo de
+  otra, se sube a `shared/` en vez de importarse en cruzado.
+
+## D-028 La política de reintentos de TanStack Query se escribe contra `OffErrorCode`
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: TanStack Query reintenta tres veces por defecto, con espera
+  creciente, ante cualquier error. Está pensado para una API propia sin límite
+  de ritmo. La nuestra no lo es.
+- **Decisión**: `retry` es una función que mira el `code` del `OffApiError`. Se
+  reintenta como mucho dos veces y solo lo transitorio: `network`,
+  `upstream_error` y `upstream_timeout`. No se reintenta nunca `rate_limited`,
+  `invalid_request`, `not_found` ni `malformed_response`. Un error que no sea un
+  `OffApiError` tampoco se reintenta. `refetchOnWindowFocus` y
+  `refetchOnReconnect` quedan apagados, `staleTime` en cinco minutos y `gcTime`
+  en treinta. La función se escribe suelta y exportada, no en línea dentro del
+  objeto de opciones, para poder probarla sin montar un cliente ni renderizar.
+- **Por qué**: el peor caso es justo el que la configuración por defecto empeora.
+  Open Food Facts permite diez búsquedas por minuto y por dirección IP, y en
+  Vercel esa dirección la compartimos (D-013): ante un `rate_limited`, tres
+  reintentos automáticos gastan tres intentos más del cupo de todo el mundo por
+  un error que por definición no se arregla insistiendo. Los otros tres códigos
+  que no se reintentan van a responder exactamente lo mismo, o son un fallo
+  nuestro de contrato que no se cura repitiendo la pregunta. Y los refetch
+  automáticos son peticiones que nadie pidió: la ficha de un producto no cambia
+  porque vuelvas a la pestaña.
+- **Alternativa descartada**: (a) dejar los valores por defecto, descrito arriba;
+  (b) apagar los reintentos del todo, que es seguro pero convierte un corte de
+  red de dos segundos en un error a la cara cuando bastaba con volver a
+  preguntar; (c) decidir el reintento mirando el estado HTTP en vez del código
+  propio, que obligaría a repetir aquí la traducción que `client.ts` ya hace y
+  dejaría dos sitios que mantener sincronizados.
+- **Consecuencias**: añadir un código a `OffErrorCode` obliga a decidir aquí si
+  se reintenta, y el `satisfies Record<OffErrorCode, ...>` del mapa de mensajes
+  obliga además a escribirle un texto. Las dos cosas fallan en compilación, no en
+  producción.
+
+## D-029 Estar sin conexión y fallar el servidor son dos estados distintos, y ninguno es "cargando"
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la pantalla de búsqueda tiene que dibujar bastante más que una
+  lista. Hecho a ojo, esto acaba en un ternario con "cargando" y "error", y todo
+  lo demás cayendo en el caso bueno.
+- **Decisión**: los estados se declaran como una unión discriminada,
+  `SearchViewState`, con seis ramas: `idle`, `loading`, `offline`, `error`,
+  `empty` y `results`. La unión la calcula una función pura,
+  `toSearchViewState`, que recibe una instantánea de la consulta y no depende de
+  React, y la pantalla solo hace un `switch` sobre `kind`. El texto se busca con
+  400 ms de retraso desde la última tecla y un mínimo de tres caracteres, que se
+  lee de `MIN_SEARCH_LENGTH` y es el mismo número que ya usa `searchFoods` para
+  no salir a la red. El texto ya estabilizado se refleja en la URL con `replace`.
+- **Por qué**: son tres cosas que se hacen mal si no se deciden antes. La primera
+  es que en TanStack Query v5 una consulta apagada con `enabled: false` se queda
+  en `status: 'pending'` para siempre, así que dibujar el cargando mirando solo
+  `isPending` produce un indicador eterno para una petición que nunca se hizo;
+  hay que mirar `fetchStatus`, que es un eje distinto. La segunda es que estar
+  sin conexión no es un error: con el modo de red por defecto la petición ni se
+  intenta, la consulta queda en `paused` y se reanuda sola al volver la red, así
+  que ahí no va un botón de reintentar porque no hay nada que reintentar. Y la
+  tercera es que "no hay red" y "Open Food Facts no responde" piden acciones
+  distintas de quien lee: recuperar la conexión o esperar. Decirle a alguien que
+  revise su wifi cuando su wifi está bien es hacerle perder el tiempo. Sacar la
+  función del componente es lo que permite probar las tres sin renderizar nada.
+- **Alternativa descartada**: (a) ternarios en el componente, descrito arriba;
+  (b) juntar `offline` con `error`, que ahorra una rama y da el mensaje
+  equivocado justo cuando menos ayuda; (c) dejar el texto de búsqueda solo en
+  estado local, sin URL, que se escribe en dos líneas menos pero pierde la
+  búsqueda al recargar; (d) escribir la URL sin `replace`, que llenaría el
+  historial de una entrada por letra y haría que el botón de atrás deshiciera la
+  palabra en vez de volver al diario.
+- **Consecuencias**: los borradores de D-002 se enseñan en la lista, no se
+  esconden, y con su carencia explicada por su nombre y el anuncio de cuándo se
+  podrá arreglar. Un resultado apagado y sin motivo parece un fallo de la
+  aplicación y no una decisión, y eso vale para cualquier elemento inerte que se
+  añada más adelante. La cancelación de la petición anterior no se escribe:
+  TanStack Query aborta la que está en vuelo al cambiar la clave de caché, y el
+  cliente ya acepta el `signal` y deja subir el `AbortError` sin envolverlo desde
+  el paso 2b.
+
+## D-030 Los decimales de cada magnitud, y dónde ocurre el redondeo
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-023 dejó dicho que el dominio no redondea y que el redondeo es
+  de presentación y ocurre una sola vez, y dejó pendiente con cuántos decimales
+  se enseña cada nutriente.
+- **Decisión**: la energía sin decimales; los gramos con uno. El formato vive en
+  `shared/lib/nutrient-format.ts` y usa `Intl.NumberFormat` con configuración
+  regional española, así que el separador decimal es la coma. Es el único sitio
+  de la aplicación donde se redondea.
+- **Por qué**: nadie decide nada con 247,3 kcal que no decidiera con 247, y en
+  cambio el primer decimal de un gramo sí distingue en cantidades pequeñas: 0,4 g
+  de sal y 0,0 g no son lo mismo, y con cero decimales las dos serían "0 g". Que
+  el redondeo esté en un único módulo es lo que hace verificable la promesa de
+  D-023: si aparece un `toFixed` en cualquier otro archivo, es un error.
+- **Alternativa descartada**: (a) un decimal también en la energía, que añade
+  ruido sin añadir información; (b) redondear en el dominio al escalar, que ya
+  descartó D-023 porque hace que el total del día dependa de en cuántos trozos se
+  calculó.
+- **Consecuencias**: los micronutrientes de la fase 2 se miden en miligramos y
+  microgramos y necesitarán su propia regla, que se añadirá aquí. Y las cifras
+  que se enseñen con `unknown` mayor que cero siguen necesitando su recuento al
+  lado (D-026): el formato decide cómo se escribe el número, no si el número
+  puede ir solo.

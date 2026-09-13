@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 
+import { InvalidDate } from '@/app/routes/InvalidDate';
 import { addDays, today, tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { formatLocalDate, formatLocalDateShort } from '@/shared/lib/format-date';
 import { currentTimeZone } from '@/shared/lib/time-zone';
@@ -51,9 +52,17 @@ function Day({ date }: { date: LocalDate }) {
         {isToday ? <p className="text-sm text-slate-500">Hoy</p> : null}
       </header>
 
-      <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-slate-500">
-        Todavía no hay registros de este día. El diario llega en el paso siguiente.
-      </p>
+      <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-slate-300 p-6 text-center">
+        <p className="text-slate-500">
+          Todavía no hay registros de este día. El diario llega en el paso siguiente.
+        </p>
+        <Link
+          to={`/dia/${date}/buscar`}
+          className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
+        >
+          Buscar un alimento
+        </Link>
+      </div>
     </div>
   );
 }
@@ -67,27 +76,5 @@ function DayLink({ to, rel, children }: { to: LocalDate; rel?: string; children:
     >
       {children}
     </Link>
-  );
-}
-
-/**
- * Una fecha que no existe no se corrige en silencio.
- *
- * Redirigir a hoy sería más cómodo de escribir y peor de usar: si has llegado
- * aquí desde un marcador mal copiado, ver el día de hoy sin más te hace creer
- * que el marcador funcionaba. Se dice qué ha pasado y se ofrece la salida.
- */
-function InvalidDate({ raw }: { raw: string }) {
-  return (
-    <div className="flex flex-col items-start gap-3">
-      <h1 className="text-2xl font-semibold tracking-tight">Esa fecha no existe</h1>
-      <p className="text-slate-600">
-        <code className="rounded bg-slate-200 px-1.5 py-0.5 text-sm">{raw}</code> no es un día del
-        calendario. Las fechas del diario se escriben como año-mes-día, por ejemplo 2026-09-13.
-      </p>
-      <Link to="/" className="font-medium text-emerald-700 underline underline-offset-4">
-        Ir al día de hoy
-      </Link>
-    </div>
   );
 }

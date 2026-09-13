@@ -4,6 +4,7 @@ import { DayPage } from '@/app/routes/DayPage';
 import { NotFoundPage } from '@/app/routes/NotFoundPage';
 import { RootLayout } from '@/app/routes/RootLayout';
 import { TodayRedirect } from '@/app/routes/TodayRedirect';
+import { SearchPage } from '@/features/food-search/SearchPage';
 
 /**
  * El mapa de rutas, en un archivo aparte del que monta la aplicación.
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: TodayRedirect },
       { path: 'dia/:date', Component: DayPage },
+      { path: 'dia/:date/buscar', Component: SearchPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

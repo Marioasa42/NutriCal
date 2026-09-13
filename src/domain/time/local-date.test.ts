@@ -6,6 +6,7 @@ import {
   localDate,
   toLocalDate,
   today,
+  tryLocalDate,
 } from '@/domain/time/local-date';
 import { InvariantError } from '@/shared/lib/invariant';
 
@@ -96,5 +97,28 @@ describe('compareLocalDates', () => {
   it('ordena cronológicamente', () => {
     const dates = [localDate('2026-12-01'), localDate('2026-01-05'), localDate('2026-03-20')];
     expect([...dates].sort(compareLocalDates)).toEqual(['2026-01-05', '2026-03-20', '2026-12-01']);
+  });
+});
+
+describe('tryLocalDate', () => {
+  it('acepta lo mismo que localDate', () => {
+    expect(tryLocalDate('2026-09-13')).toBe('2026-09-13');
+    expect(tryLocalDate('2028-02-29')).toBe('2028-02-29');
+  });
+
+  it('devuelve undefined en vez de lanzar, que es la única diferencia', () => {
+    // Los mismos valores que localDate rechaza a gritos. Aquí no puede lanzar:
+    // llegan de la URL, donde los escribe cualquiera.
+    expect(tryLocalDate('patata')).toBeUndefined();
+    expect(tryLocalDate('12/09/2026')).toBeUndefined();
+    expect(tryLocalDate('2026-9-12')).toBeUndefined();
+    expect(tryLocalDate('2026-09-12T10:00:00Z')).toBeUndefined();
+    expect(tryLocalDate('')).toBeUndefined();
+  });
+
+  it('rechaza fechas con forma correcta que no existen en el calendario', () => {
+    expect(tryLocalDate('2026-02-30')).toBeUndefined();
+    expect(tryLocalDate('2026-13-01')).toBeUndefined();
+    expect(tryLocalDate('2026-00-10')).toBeUndefined();
   });
 });

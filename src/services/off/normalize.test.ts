@@ -225,6 +225,56 @@ describe('unidad base', () => {
   it('cae en la tabla declarada cuando el envase no dice nada', () => {
     expect(readBaseUnit(offProductSchema.parse({ nutrition_data_per: '100ml' }))).toBe('ml');
   });
+
+  it('el envase manda también cuando el sólido es el que lleva la tabla mal', () => {
+    // La dirección contraria del caso de la Coca-Cola: aquí el envase dice masa
+    // y es la tabla la que se declara en mililitros por error de la fuente. Si
+    // ganara la tabla saldría un alimento en mililitros con una porción que el
+    // envase declaró en gramos, que es el mismo error de D-005 con las unidades
+    // cambiadas de sitio.
+    //
+    // Producto sintético, no capturado: los archivos de `__fixtures__` guardan
+    // solo productos reales con su URL y su fecha, y esta incoherencia concreta
+    // se construye aquí para no mezclar un invento con esas capturas.
+    const solidoConTablaEnMl = {
+      code: '0000000000001',
+      product_name: 'Yogur natural',
+      quantity: '500 g',
+      serving_size: '125 g',
+      serving_quantity: 125,
+      nutrition_data_per: '100ml',
+      nutriments: {
+        'energy-kcal_100g': 61,
+        proteins_100g: 3.5,
+        carbohydrates_100g: 4.7,
+        fat_100g: 3.3,
+      },
+    };
+
+    expect(readBaseUnit(offProductSchema.parse(solidoConTablaEnMl))).toBe('g');
+
+    // Y el alimento entero sale coherente: mandar el envase no descoloca la
+    // porción, que se queda en los gramos que el propio envase declaraba.
+    const food = expectComplete(normalizeProduct(solidoConTablaEnMl, testContext()));
+    expect(food.baseUnit).toBe('g');
+    expect(food.servings).toEqual([{ id: 'serving-2', label: '125 g', amountInBaseUnit: 125 }]);
+  });
+
+  it('el envase entero pesa más que la ración cuando ambos hablan', () => {
+    // Con la señal de masa añadida, el orden en que se miran los dos campos deja
+    // de ser indiferente: antes solo podía decidir `quantity` si decía volumen.
+    // Una lata de 330 ml con una ración declarada en gramos sigue siendo bebida.
+    const producto = offProductSchema.parse({ quantity: '330 ml', serving_size: '20 g' });
+    expect(readBaseUnit(producto)).toBe('ml');
+  });
+
+  it('lee las abreviaturas largas de masa sin quedarse en la primera letra', () => {
+    // Fija el orden de la alternancia: si `g` se probara antes que `gr`, el
+    // límite de palabra fallaría ante la `r` y el producto caería en la tabla.
+    for (const quantity of ['500 gr', '500 gramos', '1 kg', '250g']) {
+      expect(readBaseUnit(offProductSchema.parse({ quantity }))).toBe('g');
+    }
+  });
 });
 
 describe('porciones', () => {

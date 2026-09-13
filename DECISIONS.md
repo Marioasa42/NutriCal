@@ -512,3 +512,41 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   El compilador obligaría a tratar cada rama, que es tentador, pero habría que
   envolverla en un lanzador para que TanStack Query distinga éxito de fallo, y
   acabarían conviviendo las dos formas de decir lo mismo.
+
+## D-022 La unidad base la decide la primera señal del envase, sea de masa o de volumen
+- **Fecha**: 2026-09-13
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-020 dejó escrito que manda el envase y que `nutrition_data_per`
+  se consulta "solo como segunda señal, para los productos que no declaran
+  envase". El código no decía eso. `readBaseUnit` buscaba únicamente volumen en el
+  envase y, si no lo encontraba, miraba la tabla. Pero "el envase no dice
+  volumen" y "el envase no dice nada" no son el mismo hecho: un sólido con
+  `quantity: "500 g"` y `nutrition_data_per: "100ml"`, que es un error de
+  transcripción corriente en la fuente, salía declarado en mililitros con una
+  porción que el envase había dado en gramos. El daño es exactamente el que D-020
+  existe para evitar, solo que en la dirección que nadie había probado.
+- **Decisión**: se añade `MASS_IN_PACKAGE` junto a `VOLUME_IN_PACKAGE` y el envase
+  se lee buscando las dos señales. Gana la primera que aparezca, mirando
+  `quantity` antes que `serving_size`. La tabla declarada solo decide cuando el
+  envase no aporta ninguna de las dos. Ante la duda, gramos, como antes.
+- **Por qué**: la asimetría no era una decisión, era un descuido: la heurística se
+  escribió mirando el caso de la Coca-Cola, donde el error de la fuente va de
+  sólido declarado a líquido real, y nunca se probó el camino contrario. El
+  arreglo no cambia D-020, la cumple. Y el caso es más grave que el original:
+  cuando la incoherencia es "por 100 g" frente a "por 100 ml" en una bebida, la
+  diferencia son décimas por la densidad; cuando el envase declara la porción en
+  gramos y el alimento acaba en mililitros, el número de la porción es correcto y
+  su unidad es mentira, y la instantánea de D-003 lo congela en el historial.
+- **Alternativa descartada**: (a) dejar el código como estaba y escribir el test
+  afirmando `'ml'`, que documenta como intencionado un comportamiento que
+  contradice una decisión ya escrita; (b) comparar las dos señales y rechazar el
+  producto cuando se contradicen, que es lo que D-020 ya descartó porque
+  descartaría media estantería; (c) fiarse solo de `quantity` e ignorar
+  `serving_size`, que perdería los productos que no declaran envase entero.
+- **Consecuencias**: el orden de las alternativas dentro de cada expresión
+  regular pasa a ser funcional, no estético: `gramos?` y `gr` van antes que `g`
+  porque si no el límite de palabra choca con la letra siguiente y la señal se
+  pierde. Hay un test que lo fija. Y el orden en que se miran `quantity` y
+  `serving_size` también decide ahora, cosa que antes solo ocurría si uno de los
+  dos hablaba de volumen; también tiene su test.

@@ -64,10 +64,17 @@ const OPTIONAL_MACRO_KEYS = {
 } as const satisfies Partial<Record<keyof Macros, string>>;
 
 /**
- * Unidades de volumen tal y como aparecen escritas en el campo del envase.
- * `litros?` va antes que `l` para que la alternancia no se quede corta.
+ * Unidades de volumen y de masa tal y como aparecen escritas en el campo del
+ * envase.
+ *
+ * Dentro de cada alternancia lo largo va antes que lo corto: `litros?` antes que
+ * `l`, y `gramos?` y `gr` antes que `g`. La expresión regular prueba las
+ * alternativas en orden y se queda con la primera que encaje, así que si `g` se
+ * probara antes, ante "500 gr" consumiría la `g`, el `\b` del final
+ * chocaría con la `r` y la señal se perdería.
  */
 const VOLUME_IN_PACKAGE = /\d\s*(?:litros?|ml|cl|dl|l)\b/i;
+const MASS_IN_PACKAGE = /\d\s*(?:kilos?|kg|gramos?|gr|mg|g)\b/i;
 
 /**
  * La unidad base del alimento: si se mide en gramos o en mililitros.
@@ -84,13 +91,27 @@ const VOLUME_IN_PACKAGE = /\d\s*(?:litros?|ml|cl|dl|l)\b/i;
  * 100 ml" en una bebida son décimas por la densidad; la incoherencia entre la
  * unidad base y sus porciones sería un error de verdad.
  *
+ * El envase manda en las dos direcciones, y esto no es simetría por gusto. Un
+ * sólido cuya tabla se declara por 100 ml es el mismo error de la fuente visto
+ * del revés, y produce el mismo daño: un alimento en mililitros con una porción
+ * que el envase declaraba en gramos. Por eso se busca también la señal de masa,
+ * y no solo la de volumen: "el envase no dice volumen" y "el envase no dice
+ * nada" son hechos distintos, y solo el segundo justifica mirar la tabla.
+ *
  * `nutrition_data_per` sigue siendo útil como segunda señal, para los productos
- * que no declaran envase. Ante la duda, gramos, que es el caso mayoritario.
+ * que de verdad no declaran envase. Ante la duda, gramos, que es el caso
+ * mayoritario.
  */
 export function readBaseUnit(product: OffProduct): BaseUnit {
+  // Gana la primera señal que aparezca, y `quantity` se mira antes que
+  // `serving_size` porque describe el envase entero y no una ración suelta.
   for (const declaredSize of [product.quantity, product.serving_size]) {
-    if (VOLUME_IN_PACKAGE.test(declaredSize ?? '')) {
+    const declared = declaredSize ?? '';
+    if (VOLUME_IN_PACKAGE.test(declared)) {
       return 'ml';
+    }
+    if (MASS_IN_PACKAGE.test(declared)) {
+      return 'g';
     }
   }
 

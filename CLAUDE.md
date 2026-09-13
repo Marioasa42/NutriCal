@@ -70,6 +70,17 @@ cambiarla, pero no las cambies por tu cuenta.
   dilo y detente ahí. Usar una herramienta ya autenticada, como `gh`, sí está
   bien: lo prohibido es leer o manejar el secreto.
 
+## Convenciones de git
+- **Nombre de rama**: `fase-<n>/paso-<n><letra opcional>-<descripcion-corta>`, en
+  español, en minúsculas y separado por guiones. Ejemplo:
+  `fase-1/paso-3-escalado-y-totales`.
+- El trabajo que no pertenece a un paso concreto usa `fase-<n>/<descripcion-corta>`.
+- En el nombre de la rama no van acentos ni eñes, para no depender de la
+  codificación del terminal. En el resto del texto sí.
+- Las ramas antiguas en inglés (`feat/phase-1-...`) se quedan como están. No se
+  reescribe el historial ya fusionado.
+- Cada pull request tiene como base `main`.
+
 ## Fases (no adelantes trabajo de fases futuras)
 0. Preparación: proyecto, linter, tests, CI, tipos del dominio, deploy vacío.
 1. Núcleo: búsqueda en Open Food Facts, registro diario, calorías y macros, Dexie.

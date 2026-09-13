@@ -41,6 +41,22 @@ export const REQUIRED_MACRO_KEYS = [
 export type RequiredMacroKey = (typeof REQUIRED_MACRO_KEYS)[number];
 
 /**
+ * Las claves que la fuente puede no aportar.
+ *
+ * Hace falta como lista en tiempo de ejecución, y no solo como tipo, porque la
+ * suma de un día tiene que recorrerlas para contar cuántos registros no traían
+ * cada una. Las cuatro son `Grams`, cosa de la que se aprovecha esa suma.
+ */
+export const OPTIONAL_MACRO_KEYS = [
+  'sugars',
+  'saturatedFat',
+  'fiber',
+  'salt',
+] as const satisfies readonly MacroKey[];
+
+export type OptionalMacroKey = (typeof OPTIONAL_MACRO_KEYS)[number];
+
+/**
  * Comprobación en tiempo de compilación: la lista de arriba debe coincidir
  * exactamente con las claves obligatorias del tipo. Si añades un campo
  * obligatorio a `Macros` y olvidas la lista, este archivo deja de compilar.
@@ -69,4 +85,17 @@ type Expect<T extends true> = T;
  */
 export type RequiredMacroKeysAreInSync = Expect<
   SameMembers<RequiredMacroKey, RequiredKeysOf<Macros>>
+>;
+
+/** Lo contrario de `RequiredKeysOf`: las claves que sí llevan el modificador. */
+type OptionalKeysOf<T> = {
+  [K in keyof T]-?: Pick<T, K> extends Required<Pick<T, K>> ? never : K;
+}[keyof T];
+
+/**
+ * La misma red de seguridad para las opcionales. Si añades un macronutriente
+ * opcional a `Macros` y olvidas la lista, este archivo deja de compilar.
+ */
+export type OptionalMacroKeysAreInSync = Expect<
+  SameMembers<OptionalMacroKey, OptionalKeysOf<Macros>>
 >;

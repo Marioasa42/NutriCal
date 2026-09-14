@@ -1341,3 +1341,135 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   se puede teclear a mano cuando `Intl.supportedValuesOf` no está disponible,
   que es la decisión 7 del proyecto aplicada aquí: la misma regla que exige poder
   teclear un código de barras cuando no hay cámara.
+
+## D-044 Valores de referencia de micronutrientes: una tabla oficial citada, por sexo, sin edad todavía
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: CLAUDE.md exige que los valores de referencia diarios salgan de
+  fuentes oficiales (EFSA o NIH ODS), con la fuente citada en el propio archivo
+  de configuración, y nada inventado ni copiado de un blog. Ni EFSA ni NIH ODS
+  dan un número único por nutriente: dan una tabla por sexo y, dentro de cada
+  sexo, por tramo de edad. El hierro de una mujer adulta no es el de un hombre
+  (18 mg frente a 8 mg, y es el caso contrario de casi todos los demás).
+- **Decisión**: `reference-intakes.ts` cita una única fila de una única tabla
+  oficial: **"Adults, 19–30 y"** de la tabla resumen de Dietary Reference
+  Intakes (DRI) de la National Academies de EE. UU. (Apéndice J de *Dietary
+  Reference Intakes for Sodium and Potassium*, 2019), que reúne los resultados
+  de todos los informes DRI anteriores y es la que el NIH Office of Dietary
+  Supplements cita como fuente. Cada entrada lleva `female` y `male`; sin
+  tramo de edad todavía. `referenceIntakeFor(id, sex)` devuelve el que
+  corresponda, y cuando `sex` es `unspecified`, el **mayor** de los dos.
+- **Por qué**: la tabla se verificó consultando la fuente primaria en el
+  momento de escribir esta decisión (2026-09-14), no de memoria ni de una copia
+  de segunda mano, precisamente por lo que pide CLAUDE.md sobre no inventar ni
+  copiar de un blog. La fila de "19–30 y" se descarta frente a la de "31–50 y"
+  por pura arbitrariedad de elegir una sola: para 21 de los 22 nutrientes dan
+  exactamente lo mismo, y solo el magnesio distingue las dos (310/400 mg frente
+  a 320/420 mg), diferencia sin efecto práctico. Tomar el mayor de los dos
+  sexos cuando no se declara es la lectura prudente del requisito de salud del
+  proyecto: un objetivo de referencia inflado dice "te falta esto" cuando no es
+  cierto, que es un error inofensivo; uno deflactado puede decir "vas bien"
+  cuando no lo estás, que es el error que hay que evitar.
+- **Alternativa descartada**: (a) un solo juego de valores de adulto,
+  eligiendo uno de los dos sexos, que es justo el "medio inventado" que
+  CLAUDE.md pide evitar; (b) por sexo y por tramo de edad, la opción más fiel a
+  la fuente, descartada porque obligaría a pedir la fecha de nacimiento antes
+  de que sirva para nada más, y hoy no hay ninguna otra pantalla que la
+  necesite; (c) EFSA en lugar de NIH ODS, que también habría sido válido según
+  CLAUDE.md, pero NIH ODS da una tabla única, completa y consistente para los
+  22 micronutrientes del catálogo, mientras que construir la misma cobertura
+  con las fichas de EFSA habría significado mezclar veintidós documentos
+  distintos con formatos distintos.
+- **Consecuencias**: el día que se pida la fecha de nacimiento (por ejemplo,
+  para sugerir objetivos con Mifflin-St Jeor), esta decisión se revisa para
+  añadir el tramo de edad y se registra aparte. La comprobación de tipos exige
+  que el catálogo cubra exactamente los 22 micronutrientes de
+  `MICRONUTRIENTS`, con el mismo patrón que ya usa `macros.ts`.
+
+## D-045 Los límites superiores entran ahora; "ND" se representa como ausencia, nunca como cero o como techo inventado
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: la misma tabla oficial que da los valores de referencia da
+  también el Tolerable Upper Intake Level (UL) de cada nutriente: la cifra por
+  encima de la cual conviene avisar. Siete de los veintidós micronutrientes
+  (vitamina K, tiamina, riboflavina, B12, potasio, y con matices manganeso y
+  magnesio) no tienen uno: la fuente dice "ND", no determinable, porque no hay
+  base científica suficiente para fijarlo, no porque nadie lo haya buscado.
+- **Decisión**: `ReferenceIntake.upperLimit` es opcional, y `upperLimitFor`
+  devuelve `undefined` exactamente en esos siete casos. El panel de
+  micronutrientes de un paso posterior no podrá avisar de "te has pasado" en
+  ninguno de los siete, y esa limitación es correcta: es la propia ciencia la
+  que no tiene un umbral que ofrecer, y fingir uno sería peor que no decir
+  nada. El sodio es un caso aparte dentro de la propia decisión: no tiene un UL
+  clásico, pero el informe de 2019 introdujo la Chronic Disease Risk Reduction
+  Intake (CDRR), pensada para reducir el riesgo de enfermedad crónica y no la
+  toxicidad aguda; se usa como si fuera el `upperLimit` porque cumple la misma
+  función de cara a quien usa la aplicación (2 300 mg/día, "reduce si lo
+  superas"), documentando en el propio catálogo que su origen científico es
+  distinto del resto.
+- **Por qué**: D-001 ya fijó la regla general —la ausencia de una clave
+  significa "no se sabe", nunca se rellena con un valor que sustituya
+  silenciosamente al dato que falta— y esto es esa misma regla aplicada a un
+  límite en vez de a una medida. La alternativa de poner un cero, o de copiar
+  el límite de un nutriente parecido, contaminaría el panel con avisos falsos:
+  un "0 mg de margen" para la tiamina se leería como "ya te has pasado", que es
+  exactamente lo que la fuente no dice.
+- **Alternativa descartada**: (a) esconder de la interfaz los nutrientes sin
+  UL, que es la variante de "esconder lo incompleto" que D-026 ya rechazó por
+  otro motivo parecido; (b) fijar un límite propio "razonable" a ojo para los
+  siete, que es inventar un dato con la apariencia de estar citado; (c) tratar
+  el CDRR del sodio como un UL más sin decir que es un tipo de cifra distinto,
+  que habría sido más simple pero menos honesto sobre lo que esa cifra
+  significa de verdad.
+- **Consecuencias**: el componente que pinte una barra de progreso por
+  micronutriente tiene que saber dibujar "sin límite conocido" como un estado
+  legítimo, no como un hueco vacío por accidente.
+
+## D-046 El suelo de calorías depende del sexo, y se documenta que su fuente es más débil que la del resto de referencias
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: `MIN_ENERGY_GOAL` valía 1200 kcal desde la fase 1, marcado
+  expresamente como "límite conservador provisional" a la espera de esta fase.
+  Al ir a revisarlo con su fuente citada, como pedía ese comentario, resultó
+  que **no existe** una tabla oficial de "mínimo de calorías" del mismo tipo
+  que la de los micronutrientes: las Dietary Reference Intakes calculan el
+  requerimiento energético (EER) con una fórmula que depende de edad, peso,
+  talla y actividad, no con un número único por grupo del que se pueda tomar
+  un suelo.
+- **Decisión**: el suelo pasa a depender del sexo —1200 kcal para mujer o sin
+  especificar, 1500 kcal para hombre—, que es la convención clínica y dietética
+  más citada por encima del umbral de las dietas de muy pocas calorías (VLCD,
+  por debajo de 800 kcal/día, que la literatura del NIH National Task Force on
+  the Prevention and Treatment of Obesity liga a supervisión médica por riesgo
+  de desequilibrios electrolíticos). Y se documenta con toda claridad, en el
+  propio código, que esta cifra **no tiene el mismo respaldo** que los valores
+  de referencia de D-044: es un margen de práctica clínica sobre un umbral de
+  seguridad, no una fila de una tabla RDA/AI.
+- **Por qué**: la alternativa de callar la diferencia y presentar 1200/1500
+  como si vinieran de la misma clase de fuente que el resto de valores de
+  referencia habría sido precisamente lo que CLAUDE.md prohíbe con más fuerza:
+  hacer pasar una cifra por algo que no es. Es preferible una cifra bien
+  documentada sobre su origen real que una cifra con una cita que exagera su
+  certeza.
+  Sobre el sexo: el suelo, a diferencia de un valor de referencia, es un límite
+  que **impide** guardar un objetivo, así que la prudencia va al revés que en
+  D-044. Ahí, sin sexo declarado, se toma el mayor de los dos porque sugerir de
+  más es inofensivo. Aquí, sin sexo declarado, se toma el **menor** de los dos
+  (1200, no 1500): subirlo bloquearía a cualquier mujer que no haya declarado
+  su sexo con un límite pensado para hombres, y esa dirección del error sí es
+  perjudicial.
+- **Alternativa descartada**: (a) dejar 1200 kcal para todos sin distinguir
+  sexo, más simple y ya vigente, pero es exactamente la cifra "medio inventada"
+  que este paso tenía que corregir con una fuente citada; (b) calcular el suelo
+  con la fórmula EER completa a partir de los datos corporales, que sería lo
+  más fiel pero exige que existan `body.heightCm`, `body.weightKg` y
+  `body.activityLevel`, datos que hoy no se piden y que convertirían un límite
+  de seguridad en algo que depende de haber rellenado un formulario opcional.
+- **Consecuencias**: `isEnergyGoalAllowed` gana un segundo parámetro opcional,
+  `sex`, con `'unspecified'` por defecto, así que ningún código existente que
+  la llamara sin ese argumento se rompe (hoy no la llama nadie fuera de sus
+  propios tests). Si en el futuro se calcula el EER completo con los datos
+  corporales, esta decisión se revisa y se sustituye.

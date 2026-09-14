@@ -37,6 +37,14 @@ export interface DaySummary {
   readonly meals: readonly MealEntry[];
   readonly exercise: readonly ExerciseEntry[];
   readonly totals: DayTotals;
-  /** Los objetivos vigentes ese día, no los objetivos actuales. */
-  readonly goals: DailyGoals;
+  /**
+   * Los objetivos vigentes ese día, no los objetivos actuales.
+   *
+   * `undefined` cuando todavía no se ha fijado ningún objetivo, que es el
+   * estado normal de un perfil recién creado: `goalsRepository.effectiveOn`
+   * devuelve eso mismo si no hay ninguna versión anterior a la fecha (D-004).
+   * El panel de micronutrientes de la fase 2 lo trata como "usa los valores
+   * de referencia oficiales", no como un error (decisión 13, D-048).
+   */
+  readonly goals?: DailyGoals;
 }

@@ -1,6 +1,7 @@
 import type { GoalsId } from '@/domain/identity/ids';
 import type { Micronutrients } from '@/domain/nutrition/micronutrients';
 import type { Persisted } from '@/domain/persistence/persisted';
+import type { Sex } from '@/domain/profile/profile';
 import type { LocalDate } from '@/domain/time/local-date';
 import { kilocalories, type Grams, type Kilocalories } from '@/domain/units/units';
 
@@ -28,17 +29,56 @@ export interface DailyGoals extends Persisted {
 }
 
 /**
- * Suelo del objetivo de calorías.
+ * Suelo del objetivo de calorías cuando no se declara el sexo, o cuando se
+ * declara femenino. Requisito de salud del proyecto: la aplicación no debe
+ * permitir fijarse objetivos arbitrariamente bajos ni premiar comer menos.
  *
- * Requisito de salud del proyecto: la aplicación no debe permitir fijarse
- * objetivos arbitrariamente bajos ni premiar comer menos. Este valor es un
- * límite conservador provisional; en la fase 2, cuando entren las referencias
- * oficiales, se revisará con su fuente citada.
+ * ## Una cifra distinta de las demás, y hay que decirlo
+ *
+ * A diferencia de los valores de referencia de micronutrientes de
+ * `reference-intakes.ts`, que citan una fila concreta de una tabla oficial de
+ * la National Academies, **esto no existe como tabla**. Las Dietary Reference
+ * Intakes no fijan un "mínimo de seguridad" de calorías: el requerimiento
+ * energético (EER) es una fórmula que depende de edad, peso, talla y
+ * actividad, no un número único por grupo del que se pueda tomar un suelo.
+ *
+ * Lo más cercano a una cifra oficial citable es el límite clínico de las
+ * dietas de muy pocas calorías: por debajo de 800 kcal/día se consideran
+ * "very low-calorie diets" (VLCD) y la literatura del NIH National Task Force
+ * on the Prevention and Treatment of Obesity exige supervisión médica por el
+ * riesgo de desequilibrios electrolíticos y otras complicaciones. El NHS
+ * británico sitúa 800–1200 kcal/día como "dieta baja en calorías", ya en
+ * terreno que pide cautela, no como un valor cómodo.
+ *
+ * 1200 kcal (aquí) y 1500 kcal para hombre (`minEnergyGoalFor`) son la
+ * convención clínica y dietética más citada por encima de ese umbral, y es
+ * exactamente eso: una convención de práctica, no una cifra con el respaldo de
+ * una tabla RDA/AI. Se documenta así a propósito, para no hacerla pasar por
+ * algo que no es (D-046).
  */
 export const MIN_ENERGY_GOAL = kilocalories(1200);
 
-/** Un objetivo de energía es aceptable si no baja del suelo. */
-export const isEnergyGoalAllowed = (value: Kilocalories): boolean => value >= MIN_ENERGY_GOAL;
+/**
+ * El suelo de calorías según el sexo declarado. Ver el comentario de
+ * `MIN_ENERGY_GOAL` sobre de dónde sale de verdad esta cifra.
+ */
+export function minEnergyGoalFor(sex: Sex): Kilocalories {
+  return sex === 'male' ? kilocalories(1500) : MIN_ENERGY_GOAL;
+}
+
+/**
+ * Un objetivo de energía es aceptable si no baja del suelo que le corresponde.
+ *
+ * Sin sexo declarado, el suelo es el más BAJO de los dos (1200, no 1500), y es
+ * al revés que en `referenceIntakeFor`: allí, ante la duda, más vale sugerir de
+ * más. Aquí un suelo es un límite que **impide** guardar un objetivo, así que
+ * ante la duda tiene que ser el menos restrictivo: subirlo a 1500 sin saber el
+ * sexo bloquearía a cualquier mujer que no lo haya declarado con un límite
+ * pensado para hombres, que es el error de seguridad contrario al que se
+ * quiere evitar.
+ */
+export const isEnergyGoalAllowed = (value: Kilocalories, sex: Sex = 'unspecified'): boolean =>
+  value >= minEnergyGoalFor(sex);
 
 /**
  * Los objetivos vigentes en una fecha, dada la lista ordenable de versiones.

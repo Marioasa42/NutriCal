@@ -37,6 +37,13 @@ export function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
       </div>
 
+      <Link
+        to="/ajustes/objetivos"
+        className="text-sm font-medium text-emerald-700 underline underline-offset-4"
+      >
+        Objetivos diarios →
+      </Link>
+
       <form
         className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4"
         onSubmit={(event) => {

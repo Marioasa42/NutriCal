@@ -8,6 +8,7 @@ import { EditEntryPage } from '@/features/diary/EditEntryPage';
 import { LogEntryPage } from '@/features/diary/LogEntryPage';
 import { BarcodePage } from '@/features/food-search/BarcodePage';
 import { SearchPage } from '@/features/food-search/SearchPage';
+import { GoalsPage } from '@/features/goals/GoalsPage';
 import { SettingsPage } from '@/features/profile/SettingsPage';
 
 /**
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       // sustantivo: una crea y la otra corrige algo que ya está escrito.
       { path: 'dia/:date/registro/:entryId', Component: EditEntryPage },
       { path: 'ajustes', Component: SettingsPage },
+      { path: 'ajustes/objetivos', Component: GoalsPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

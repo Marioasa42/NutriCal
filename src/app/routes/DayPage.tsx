@@ -5,8 +5,8 @@ import { InvalidDate } from '@/app/routes/InvalidDate';
 import { addDays, today, tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { DayDiary } from '@/features/diary/DayDiary';
 import { ExampleDataPanel } from '@/features/diary/ExampleDataPanel';
+import { useTimeZone } from '@/features/profile/profile-context';
 import { formatLocalDate, formatLocalDateShort } from '@/shared/lib/format-date';
-import { currentTimeZone } from '@/shared/lib/time-zone';
 
 /**
  * El diario de un día: la fecha, la navegación entre días y lo registrado.
@@ -28,9 +28,10 @@ export function DayPage() {
 }
 
 function Day({ date }: { date: LocalDate }) {
+  const timeZone = useTimeZone();
   const previous = addDays(date, -1);
   const next = addDays(date, 1);
-  const isToday = date === today(currentTimeZone());
+  const isToday = date === today(timeZone);
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,7 +39,7 @@ function Day({ date }: { date: LocalDate }) {
         <DayLink to={previous} rel="prev">
           ← {formatLocalDateShort(previous)}
         </DayLink>
-        {isToday ? null : <DayLink to={today(currentTimeZone())}>Hoy</DayLink>}
+        {isToday ? null : <DayLink to={today(timeZone)}>Hoy</DayLink>}
         <DayLink to={next} rel="next">
           {formatLocalDateShort(next)} →
         </DayLink>

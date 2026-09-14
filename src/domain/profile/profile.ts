@@ -45,3 +45,37 @@ export interface Profile extends Persisted {
 /** Solo se puede sugerir un objetivo si hay datos y un sexo declarado. */
 export const canSuggestGoals = (profile: Profile): boolean =>
   profile.body !== undefined && profile.body.sex !== 'unspecified';
+
+/**
+ * Crea el perfil inicial.
+ *
+ * Existe porque la zona horaria pasa a leerse de aquí y no del navegador
+ * (D-043), y para leerla de aquí tiene que haber un "aquí". Se crea solo, en el
+ * primer arranque, sin preguntar nada: exigir un formulario antes de poder usar
+ * la aplicación sería una cuenta con otro nombre, y la decisión 6 del proyecto
+ * dice que nadie tiene que registrarse para usar esto.
+ *
+ * Los valores iniciales se toman del navegador, que es lo que acertará casi
+ * siempre, y a partir de ahí mandan los del perfil. Es la diferencia entre un
+ * valor por defecto y una fuente de verdad: el navegador propone una vez, el
+ * perfil decide siempre.
+ *
+ * El cuerpo (`body`) se queda fuera a propósito. Solo hace falta para sugerir
+ * objetivos, son datos sensibles, y no se piden hasta que sirvan para algo.
+ */
+export function createProfile(options: {
+  id: ProfileId;
+  timeZone: string;
+  locale: string;
+  at: Instant;
+}): Profile {
+  const { id, timeZone, locale, at } = options;
+  return {
+    id,
+    timeZone,
+    locale,
+    display: { massUnit: 'metric', energyUnit: 'kcal', firstDayOfWeek: 'monday' },
+    createdAt: at,
+    updatedAt: at,
+  };
+}

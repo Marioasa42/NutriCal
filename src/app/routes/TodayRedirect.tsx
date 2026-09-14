@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router';
 
 import { today } from '@/domain/time/local-date';
-import { currentTimeZone } from '@/shared/lib/time-zone';
+import { useTimeZone } from '@/features/profile/profile-context';
 
 /**
  * La raíz no es una pantalla: manda al día de hoy.
@@ -10,10 +10,13 @@ import { currentTimeZone } from '@/shared/lib/time-zone';
  * atrás desde el diario salga de la aplicación en lugar de rebotar contra esta
  * redirección una y otra vez.
  *
- * El día se calcula en la zona horaria de la persona usuaria, no en UTC. Es la
- * decisión 3 de CLAUDE.md aplicada al primer sitio donde se nota: a las 00:30 en
- * Madrid, "hoy" ya es el día siguiente aunque en Londres todavía no lo sea.
+ * El día se calcula en la zona horaria del perfil, no del navegador (D-043). Es
+ * la decisión 3 de CLAUDE.md aplicada al primer sitio donde se nota: a las 00:30
+ * en Madrid, "hoy" ya es el día siguiente aunque en Londres todavía no lo sea, y
+ * eso tiene que seguir siendo así aunque quien viaja abra la aplicación desde
+ * Nueva York.
  */
 export function TodayRedirect() {
-  return <Navigate to={`/dia/${today(currentTimeZone())}`} replace />;
+  const timeZone = useTimeZone();
+  return <Navigate to={`/dia/${today(timeZone)}`} replace />;
 }

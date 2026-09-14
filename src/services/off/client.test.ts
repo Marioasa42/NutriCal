@@ -29,6 +29,34 @@ describe('a quién se le habla', () => {
     expect(calls[0]?.url).toBe('/api/off/search?q=leche&page=3');
   });
 
+  it('normaliza el texto, porque la URL es la clave de caché de la red de distribución', async () => {
+    /*
+     * El test que faltaba, y faltaba por un motivo que conviene recordar: las dos
+     * puntas se probaban por separado y el trato ENTRE ellas no se probaba en
+     * ninguna. `contracts/text.ts` afirmaba por escrito que las dos cachés
+     * aciertan a la vez ante "Plátano" y "platano". Medido, daban tres entradas
+     * distintas, porque el navegador normalizaba solo la clave de TanStack Query
+     * y mandaba a la red el texto crudo. La función serverless normalizaba por
+     * dentro, pero eso llega tarde: la caché compartida y el cubo de fichas
+     * quedan por delante de ella. Ver D-041.
+     */
+    const urlFor = async (query: string) => {
+      const { fetchImpl, calls } = createFakeFetch(() => jsonResponse(SEARCH_BODY));
+      await searchProducts(query, { fetchImpl });
+      return calls[0]?.url;
+    };
+
+    const escrituras = await Promise.all([
+      urlFor('Plátano'),
+      urlFor('platano'),
+      urlFor('  PLÁTANO  '),
+      urlFor('plátano'),
+    ]);
+
+    expect(new Set(escrituras).size).toBe(1);
+    expect(escrituras[0]).toBe('/api/off/search?q=platano');
+  });
+
   it('escapa lo que va en la ruta', async () => {
     const { fetchImpl, calls } = createFakeFetch(() =>
       jsonResponse({ barcode: 'a b', product: null }),

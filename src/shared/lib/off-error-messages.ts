@@ -42,7 +42,13 @@ const MESSAGES = {
   rate_limited: {
     title: 'Demasiadas búsquedas seguidas',
     detail:
-      'Open Food Facts limita cuántas búsquedas se pueden hacer por minuto y hemos llegado al tope. Espera un momento antes de seguir.',
+      'Hemos llegado al tope de búsquedas por minuto que nos ponemos nosotros mismos. Espera un momento antes de seguir.',
+    canRetry: false,
+  },
+  upstream_rate_limited: {
+    title: 'Open Food Facts nos ha frenado',
+    detail:
+      'La fuente de datos limita cuántas consultas admite por minuto y hemos llegado a su tope. Espera un momento antes de volver a buscar.',
     canRetry: false,
   },
   invalid_request: {
@@ -63,6 +69,21 @@ const MESSAGES = {
   },
 } as const satisfies Record<OffErrorCode, OffErrorMessage>;
 
+/**
+ * Los códigos cuyo texto cambia cuando el servidor dice cuántos segundos esperar.
+ *
+ * Es un mapa parcial a propósito: `Partial<Record<...>>` significa que la mayoría
+ * de los códigos no están, y los que no están se quedan con su mensaje de
+ * siempre. Buscar aquí devuelve `undefined` para esos, que es justo la señal de
+ * "este código no tiene versión con espera".
+ */
+const WAITING_DETAIL: Partial<Record<OffErrorCode, (seconds: number) => string>> = {
+  rate_limited: (seconds) =>
+    `Hemos llegado al tope de búsquedas por minuto que nos ponemos nosotros mismos. Vuelve a intentarlo dentro de ${String(seconds)} segundos.`,
+  upstream_rate_limited: (seconds) =>
+    `La fuente de datos limita cuántas consultas admite por minuto y hemos llegado a su tope. Vuelve a intentarlo dentro de ${String(seconds)} segundos.`,
+};
+
 /** Para lo que no es un error nuestro: casi siempre un fallo de programación. */
 const UNKNOWN: OffErrorMessage = {
   title: 'Algo ha ido mal',
@@ -77,13 +98,13 @@ export function describeOffError(error: unknown): OffErrorMessage {
 
   const message = MESSAGES[error.code];
 
-  // El único caso en el que el servidor nos dice cuánto esperar. Merece la pena
-  // decirlo: "espera un momento" y "espera 34 segundos" no se leen igual.
-  if (error.code === 'rate_limited' && error.retryAfterSeconds !== undefined) {
-    return {
-      ...message,
-      detail: `Open Food Facts limita cuántas búsquedas se pueden hacer por minuto y hemos llegado al tope. Vuelve a intentarlo dentro de ${error.retryAfterSeconds} segundos.`,
-    };
+  // Los dos únicos casos en los que el servidor nos dice cuánto esperar. Merece
+  // la pena decirlo: "espera un momento" y "espera 34 segundos" no se leen igual.
+  // Quién impone el límite sigue importando, así que cada uno conserva su texto
+  // y solo se sustituye la parte de la espera.
+  const waiting = WAITING_DETAIL[error.code];
+  if (waiting !== undefined && error.retryAfterSeconds !== undefined) {
+    return { ...message, detail: waiting(error.retryAfterSeconds) };
   }
 
   return message;

@@ -62,6 +62,34 @@ function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
 }
 
+/**
+ * Cuánto decimos que hay que esperar cuando la fuente nos limita y no lo dice
+ * ella. Su ventana documentada es de un minuto, así que esperar eso es lo
+ * prudente: pasarse de corto es volver a llamar a una puerta que acaban de
+ * cerrarnos.
+ */
+const UPSTREAM_RATE_LIMIT_FALLBACK_SECONDS = 60;
+
+/**
+ * La respuesta a que Open Food Facts nos limite el ritmo.
+ *
+ * Se devuelve con 429 y con su propio código, no con el 502 genérico de "la
+ * fuente ha respondido mal". El motivo está medido y documentado en D-040: al
+ * mezclarlo con `upstream_error`, el navegador lo trataba como un fallo pasajero
+ * y lo reintentaba dos veces, de modo que cada rechazo de la fuente producía tres
+ * peticiones más contra la fuente. Justo lo contrario de lo que hay que hacer
+ * cuando alguien te dice que pares.
+ */
+function upstreamRateLimited(retryAfterSeconds: number | undefined): Response {
+  const seconds = retryAfterSeconds ?? UPSTREAM_RATE_LIMIT_FALLBACK_SECONDS;
+  return errorResponse(
+    429,
+    'upstream_rate_limited',
+    'Open Food Facts ha limitado el ritmo de consultas. Hay que esperar antes de volver a buscar.',
+    { 'retry-after': String(seconds) },
+  );
+}
+
 export async function handleSearch(request: Request, deps: HandlerDeps): Promise<Response> {
   if (request.method !== 'GET') {
     return methodNotAllowed();
@@ -92,6 +120,9 @@ export async function handleSearch(request: Request, deps: HandlerDeps): Promise
 
   try {
     const upstream = await fetchUpstream(buildSearchUrl(query, page), deps.fetchImpl);
+    if (upstream.status === 429) {
+      return upstreamRateLimited(upstream.retryAfterSeconds);
+    }
     if (upstream.status !== 200) {
       return errorResponse(
         502,
@@ -144,6 +175,10 @@ export async function handleProduct(request: Request, deps: HandlerDeps): Promis
 
   try {
     const upstream = await fetchUpstream(buildProductUrl(barcode), deps.fetchImpl);
+
+    if (upstream.status === 429) {
+      return upstreamRateLimited(upstream.retryAfterSeconds);
+    }
 
     // Open Food Facts responde 404 para un código que no conoce. No es un fallo
     // nuestro ni suyo: es una respuesta legítima que conviene cachear un rato.

@@ -1,4 +1,5 @@
 import {
+  type API_ERROR_CODES,
   apiErrorSchema,
   productPayloadSchema,
   searchPayloadSchema,
@@ -20,20 +21,57 @@ const API_BASE = '/api/off';
 /**
  * Los fallos que este cliente sabe nombrar.
  *
- * Los cinco primeros son los que ya produce `api/_lib/http.ts`, así que el
+ * Los seis primeros son los que ya produce `api/_lib/http.ts`, así que el
  * frontend y las funciones serverless hablan del mismo vocabulario. Los dos
  * últimos solo pueden ocurrir aquí: `network` cuando la petición ni sale, que es
  * el caso de estar sin conexión, y `malformed_response` cuando la respuesta no
  * cumple nuestro propio contrato, que es un fallo nuestro.
+ *
+ * `rate_limited` es nuestro cubo y `upstream_rate_limited` es el de Open Food
+ * Facts. Ninguno de los dos se reintenta, pero son distintos y hay que poder
+ * verlos por separado en los registros (D-040).
  */
 export type OffErrorCode =
   | 'invalid_request'
   | 'not_found'
   | 'rate_limited'
+  | 'upstream_rate_limited'
   | 'upstream_error'
   | 'upstream_timeout'
   | 'network'
   | 'malformed_response';
+
+/**
+ * Red de seguridad: esta unión y la lista de Zod no se pueden desincronizar.
+ *
+ * Es el mismo patrón que `macros.ts` usa para atar `REQUIRED_MACRO_KEYS` a
+ * `Macros`, y aquí lo pide un caso real. Al añadir `upstream_rate_limited`
+ * (D-040) se tocó esta unión y se olvidó `API_ERROR_CODES`, que es una lista
+ * cerrada de Zod. El resultado no habría sido un error ruidoso sino uno
+ * silencioso: la envoltura no habría validado, y `errorFromResponse` se habría
+ * caído a adivinar el código por el estado HTTP, poniéndole al error el nombre
+ * equivocado. Un fallo así solo se ve leyendo los registros y desconfiando de
+ * ellos.
+ *
+ * Comparar en las dos direcciones (`A extends B` y `B extends A`) es lo que hace
+ * que falle tanto si sobra un código como si falta. Con una sola dirección, la
+ * mitad de los descuidos pasaría. Los corchetes de `[A] extends [B]` evitan que
+ * TypeScript reparta la comprobación miembro a miembro de la unión, que es su
+ * comportamiento por defecto y aquí daría un resultado inútil.
+ */
+type Expect<T extends true> = T;
+type SameMembers<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : { sobranEnElEsquemaDeZod: Exclude<B, A> }
+  : { faltanEnElEsquemaDeZod: Exclude<A, B> };
+
+/** Los dos que solo existen en el navegador: nunca los produce una función. */
+type ClientOnlyErrorCode = 'network' | 'malformed_response';
+
+export type OffErrorCodesAreInSync = Expect<
+  SameMembers<OffErrorCode, (typeof API_ERROR_CODES)[number] | ClientOnlyErrorCode>
+>;
 
 /**
  * Error tipado del cliente.
@@ -52,7 +90,7 @@ export class OffApiError extends Error {
   readonly code: OffErrorCode;
   /** El estado HTTP, si llegó a haber respuesta. */
   readonly status: number | undefined;
-  /** Segundos que pide esperar el servidor, solo en `rate_limited`. */
+  /** Segundos que pide esperar el servidor, solo en los dos límites de ritmo. */
   readonly retryAfterSeconds: number | undefined;
 
   constructor(
@@ -113,6 +151,9 @@ async function errorFromResponse(response: Response): Promise<OffApiError> {
     return new OffApiError(parsed.data.error.code, parsed.data.error.message, shared);
   }
 
+  // Ante la duda, el código que NO se reintenta. Si un 429 llega sin cuerpo
+  // reconocible no sabemos de quién es el límite, pero sí sabemos que insistir lo
+  // empeora, así que se elige el que frena (D-040).
   const code: OffErrorCode = response.status === 429 ? 'rate_limited' : 'upstream_error';
   return new OffApiError(code, `La API ha respondido con el estado ${response.status}.`, shared);
 }

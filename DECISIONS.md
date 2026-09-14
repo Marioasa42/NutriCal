@@ -1144,3 +1144,93 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   de los pasos 4, 4b y 5 se enseñaron vacías. Y sembrar dos veces no duplica nada,
   porque los identificadores son fijos: el segundo sembrado reescribe el primero
   y devuelve a la vida lo que estuviera retirado.
+
+## D-040 El límite de la fuente deja de disfrazarse de fallo pasajero
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: usando la aplicación una sola persona contra el despliegue de
+  `main`, los registros de Vercel enseñaron en cuarenta segundos **siete 502,
+  cinco 429 y solo tres 200**. El 429 es nuestro cubo de fichas, que rechaza
+  antes de salir a la red y por tanto no le cuesta nada a la fuente. El 502 es
+  `upstream_error`, o sea que la petición sí salió y Open Food Facts la rechazó.
+  Eso son **diez peticiones salientes en cuarenta segundos, quince por minuto**,
+  contra un límite documentado de diez por minuto. Y la dirección IP es la de
+  Vercel, compartida, con aviso expreso en su documentación de que pueden denegar
+  el acceso por IP.
+- **Decisión**: el límite de ritmo de la fuente deja de traducirse a `502
+  upstream_error` y pasa a ser **`429 upstream_rate_limited`**, un código propio
+  que no está en la lista de lo reintentable y que conserva el `retry-after` de
+  la fuente cuando lo manda, o un minuto entero cuando no lo manda. Además los
+  reintentos bajan de dos a uno. `rate_limited` (nuestro cubo) y
+  `upstream_rate_limited` (el suyo) son dos códigos distintos aunque los dos
+  viajen con un 429.
+- **Por qué**: la traducción anterior creaba un bucle de realimentación medible.
+  `handlers.ts` convertía **cualquier** respuesta que no fuera 200 en un 502
+  `upstream_error`, y `upstream_error` estaba en `RETRYABLE_CODES`, así que el
+  navegador respondía a un "para" de la fuente con dos peticiones más contra la
+  fuente. Reproducido con la cadena entera —navegador, función serverless y una
+  fuente devolviendo 429—: **una sola búsqueda producía tres peticiones
+  salientes**. Con el arreglo produce una. La regla que queda es que la única
+  respuesta que nunca hay que repetir no puede llegar indistinguible de la que sí
+  conviene repetir.
+- **Alternativa descartada**: (a) quitar `upstream_error` de la lista de
+  reintentables, que también corta el bucle pero de paso deja de reintentar un
+  500 pasajero de verdad, que es justo el caso para el que los reintentos
+  existen; (b) traducir el límite de la fuente a nuestro `rate_limited`, más
+  corto y que mezcla dos cosas que hay que poder contar por separado en los
+  registros: si no se distinguen, no hay forma de saber si un arreglo funcionó;
+  (c) bajar los reintentos a cero, que castiga la red mala de quien va en el
+  metro por un problema que no es suyo.
+- **Consecuencias**: `ErrorCode` y `OffErrorCode` ganan un miembro, y como son el
+  vocabulario compartido entre las dos puntas (D-013), añadirlo obliga a tocar
+  las dos y a que el mensaje de la interfaz diga quién impone el límite. Este
+  arreglo **no** resuelve el problema de fondo, que es que se sale a la red por
+  cada prefijo tecleado: en la misma reproducción, teclear "leche entera" con
+  pausas de 450 ms pasó de once peticiones a nueve. Las nueve las quita D-041.
+
+## D-041 Buscar mientras se teclea se hace en local; a la fuente se sale con intención
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: propuesta
+- **Contexto**: el diagnóstico de D-040 destapó una causa anterior. Midiendo el
+  par `useDebouncedValue` + `useFoodSearch` con el cliente y el `QueryClient`
+  reales, teclear "leche entera" produce **una** petición si se teclea a menos de
+  400 ms por tecla y **nueve** si se teclea a más. El precipicio está exactamente
+  en el valor de `SEARCH_DEBOUNCE_MS`. El debounce funciona y cancela bien; lo
+  que pasa es que cuando las pausas superan su umbral no hay nada que cancelar,
+  porque cada petición termina antes de que empiece la siguiente. Y cada prefijo
+  (`lec`, `lech`, `leche`…) es una entrada de caché distinta en los tres sitios a
+  la vez: TanStack Query, la red de distribución de Vercel y Open Food Facts. Una
+  sesión realista —teclear, mirar los resultados, refinar— gastó seis peticiones
+  en trece segundos, que es el cubo entero.
+- **Decisión**: mientras se teclea se busca **solo en el catálogo local** de
+  Dexie, sin debounce, porque leer IndexedDB no cuesta red. A Open Food Facts se
+  sale únicamente con una acción explícita: Intro o un botón. Además el cliente
+  manda a la red el texto **normalizado**, no el crudo.
+- **Por qué**: la documentación de Open Food Facts avisa explícitamente de que no
+  se use su búsqueda para buscar mientras se teclea, y ese aviso ya estaba
+  recogido en el contexto de D-013. La pantalla del paso 4 hizo exactamente eso,
+  con el debounce como paliativo. Así que esto no es ajustar un parámetro: es que
+  el diseño de la pantalla no era compatible con las condiciones de la fuente que
+  nosotros mismos habíamos anotado. Buscar en local no es además un premio de
+  consolación: es instantáneo, funciona sin conexión y es la mitad de D-013 que
+  nunca se implementó —`foodRepository.searchByName` existe y está probado desde
+  el paso 1, y no lo llamaba nadie más que sus propios tests—. Lo de normalizar la
+  URL arregla una afirmación falsa: `contracts/text.ts` dice que las dos cachés
+  aciertan a la vez ante "Plátano" y "platano", y medido daba **tres** entradas de
+  caché distintas para el mismo término, porque la normalización se aplicaba solo
+  a la clave de TanStack Query y no a la URL saliente.
+- **Alternativa descartada**: (a) subir el debounce a 800 o 1000 ms, dos líneas,
+  pero en el móvil se teclea más despacio que cualquier umbral razonable, así que
+  estrecha el agujero sin cerrarlo y sigue incumpliendo el aviso de la fuente;
+  (b) agrandar el cubo de fichas, que es apagar la alarma en vez del fuego y
+  además reparte el daño sobre una IP compartida; (c) salir a la red también tras
+  una pausa larga, que vuelve a meter peticiones que nadie pidió.
+- **Consecuencias**: la primera vez que se abre la aplicación el catálogo está
+  vacío, así que teclear no enseña nada hasta pulsar el botón; hay que decirlo en
+  el estado vacío, y los datos de ejemplo de D-039 ayudan. Los números del cubo
+  (`capacity: 6`, `refillPerMinute: 6`) se revisan **después** de medir el tráfico
+  con esto puesto, no antes, para no ajustar a ojo. Y cuando llegue USDA en la
+  fase 2, añadir una segunda fuente deja de multiplicar el problema: teclear no
+  genera tráfico, y elegir fuente pasa a ser una decisión de quien busca.

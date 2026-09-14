@@ -26,6 +26,11 @@ function failing(error: Error): typeof fetch {
   return () => Promise.reject(error);
 }
 
+/** Como `upstream`, pero con cabeceras propias: hace falta para el `retry-after`. */
+function upstreamWithHeaders(status: number, headers: Record<string, string>): typeof fetch {
+  return () => Promise.resolve(new Response(null, { status, headers }));
+}
+
 function deps(overrides: Partial<HandlerDeps> = {}): HandlerDeps {
   const bucket: TokenBucket = createTokenBucket({ capacity: 100, refillPerMinute: 100 });
   return {
@@ -114,6 +119,65 @@ describe('búsqueda', () => {
 
     expect(response.status).toBe(502);
     expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  /**
+   * La regresión de D-040, y la razón de que este bloque exista.
+   *
+   * Que el límite de la fuente saliera por el mismo desagüe que "la fuente ha
+   * fallado" no era un detalle de nomenclatura: `upstream_error` estaba en la
+   * lista de lo reintentable, así que el navegador respondía a un "para" con dos
+   * peticiones más. Si alguien vuelve a unificar estas dos ramas, este test lo
+   * dice.
+   */
+  it('el límite de la fuente NO es un 502: es un 429 con su propio código', async () => {
+    const response = await handleSearch(
+      new Request(`${SEARCH_URL}?q=leche`),
+      deps({ fetchImpl: upstream(429, null) }),
+    );
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('upstream_rate_limited');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+  });
+
+  it('respeta el retry-after que manda la fuente', async () => {
+    const response = await handleSearch(
+      new Request(`${SEARCH_URL}?q=leche`),
+      deps({ fetchImpl: upstreamWithHeaders(429, { 'retry-after': '37' }) }),
+    );
+
+    expect(response.headers.get('retry-after')).toBe('37');
+  });
+
+  it('si la fuente no dice cuánto esperar, esperamos su ventana entera', async () => {
+    // Inventar una espera corta es volver a llamar a una puerta que acaban de
+    // cerrarnos. Su ventana documentada es de un minuto.
+    const response = await handleSearch(
+      new Request(`${SEARCH_URL}?q=leche`),
+      deps({ fetchImpl: upstream(429, null) }),
+    );
+
+    expect(response.headers.get('retry-after')).toBe('60');
+  });
+
+  it('nuestro límite y el suyo no se confunden', async () => {
+    const bucket = createTokenBucket({ capacity: 0, refillPerMinute: 1 });
+    const ours = await handleSearch(new Request(`${SEARCH_URL}?q=leche`), deps({ bucket }));
+    const theirs = await handleSearch(
+      new Request(`${SEARCH_URL}?q=leche`),
+      deps({ fetchImpl: upstream(429, null) }),
+    );
+
+    // Los dos son 429 porque los dos obligan a esperar, pero el código distingue
+    // quién puso el límite: el nuestro ni siquiera llegó a salir a la red.
+    expect(ours.status).toBe(429);
+    expect(theirs.status).toBe(429);
+    expect(((await ours.json()) as { error: { code: string } }).error.code).toBe('rate_limited');
+    expect(((await theirs.json()) as { error: { code: string } }).error.code).toBe(
+      'upstream_rate_limited',
+    );
   });
 
   it('distingue el tiempo agotado de un fallo cualquiera', async () => {

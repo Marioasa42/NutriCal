@@ -31,6 +31,24 @@ describe('describeOffError', () => {
       new OffApiError('rate_limited', 'x', { retryAfterSeconds: 34 }),
     );
     expect(withHint.detail).toContain('34 segundos');
+
+    const upstreamHint = describeOffError(
+      new OffApiError('upstream_rate_limited', 'x', { retryAfterSeconds: 60 }),
+    );
+    expect(upstreamHint.detail).toContain('60 segundos');
+  });
+
+  it('distingue nuestro límite del de la fuente', () => {
+    // Los dos obligan a esperar y ninguno se reintenta, pero quién puso el
+    // límite cambia lo que significa el aviso: el nuestro es una precaución
+    // nuestra, el suyo es que ya hemos llamado demasiado a su puerta (D-040).
+    const ours = describeOffError(new OffApiError('rate_limited', 'x'));
+    const theirs = describeOffError(new OffApiError('upstream_rate_limited', 'x'));
+
+    expect(ours.canRetry).toBe(false);
+    expect(theirs.canRetry).toBe(false);
+    expect(ours.title).not.toBe(theirs.title);
+    expect(ours.detail).not.toBe(theirs.detail);
   });
 
   it('sobrevive a algo que no es un error nuestro', () => {

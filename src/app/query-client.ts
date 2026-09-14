@@ -15,16 +15,29 @@ import { OffApiError, type OffErrorCode } from '@/services/off/client';
 /**
  * Fallos que pueden desaparecer solos si se insiste.
  *
- * El resto no: `rate_limited` empeora al reintentar, porque cada intento cuenta
- * contra el mismo límite que acabamos de agotar; `invalid_request` y
- * `not_found` darán exactamente la misma respuesta; y `malformed_response`
- * significa que nuestro propio contrato no se cumple, que es un fallo nuestro y
- * no se arregla pidiéndolo otra vez.
+ * El resto no: `rate_limited` y `upstream_rate_limited` empeoran al reintentar,
+ * porque cada intento cuenta contra el mismo límite que acabamos de agotar;
+ * `invalid_request` y `not_found` darán exactamente la misma respuesta; y
+ * `malformed_response` significa que nuestro propio contrato no se cumple, que
+ * es un fallo nuestro y no se arregla pidiéndolo otra vez.
+ *
+ * `upstream_rate_limited` no existía cuando se escribió esta lista, y esa
+ * ausencia es exactamente el fallo que documenta D-040: el límite de Open Food
+ * Facts llegaba disfrazado de `upstream_error`, que sí está aquí, así que la
+ * única respuesta que nunca hay que repetir se repetía dos veces.
  */
 const RETRYABLE_CODES: readonly OffErrorCode[] = ['network', 'upstream_error', 'upstream_timeout'];
 
-/** Dos reintentos, no los tres del valor por defecto. Ver el comentario de arriba. */
-const MAX_RETRIES = 2;
+/**
+ * Un reintento, no dos.
+ *
+ * Bajado tras medir el tráfico real contra la fuente (D-040). Un fallo pasajero
+ * de verdad se arregla al primer reintento; el segundo casi nunca añadía un
+ * acierto y sí multiplicaba por tres la carga saliente en el momento en que la
+ * fuente estaba peor. Ante la duda, el lado que no castiga a una dirección IP
+ * que compartimos con desconocidos.
+ */
+const MAX_RETRIES = 1;
 
 /**
  * Se escribe como función suelta, y no en línea dentro del objeto de opciones,

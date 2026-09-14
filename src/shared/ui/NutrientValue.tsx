@@ -39,8 +39,13 @@ export interface NutrientValueProps {
  * decisión mencionaba, "sobre N de M registros", porque se entiende sin
  * aprender nada y no depende de que nadie pase el ratón por encima ni despliegue
  * un detalle. Queda anotada como D-035, pendiente de revisión.
+ *
+ * Exportada porque el panel de micronutrientes de la fase 2 (D-050) la
+ * reutiliza tal cual para sus barras: es la misma regla, "no se puede enseñar
+ * un nutriente sin su recuento", así que tenía que ser el mismo componente y
+ * no una segunda copia que pudiera divergir de esta.
  */
-function UnknownNote({ missing, total }: UnknownCount) {
+export function UnknownNote({ missing, total }: UnknownCount) {
   const counted = total - missing;
   return (
     <span className="text-xs font-normal text-amber-800">

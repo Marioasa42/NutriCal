@@ -79,7 +79,22 @@ cambiarla, pero no las cambies por tu cuenta.
   codificación del terminal. En el resto del texto sí.
 - Las ramas antiguas en inglés (`feat/phase-1-...`) se quedan como están. No se
   reescribe el historial ya fusionado.
-- Cada pull request tiene como base `main`.
+- Cada pull request tiene como base `main`, y `main` tiene que estar
+  actualizado antes de crear la rama. **Nunca encadenes ramas** (una rama
+  creada sobre otra rama sin fusionar, en vez de sobre `main`), ni siquiera
+  para un paso que depende del anterior. Si un paso depende de otro que
+  todavía no está fusionado, dímelo y decido si lo fusiono antes de que
+  empieces o si esperamos. El motivo no es de estilo: cuando un PR se fusiona
+  con "squash and merge", el commit que llega a `main` tiene un hash distinto
+  del commit original de esa rama, así que una rama hija que arrastrara ese
+  commit original ya no comparte historia real con el nuevo `main`. La
+  primera fusión, o el primer intento de traer `main` a esa rama, puede
+  entonces marcar como conflicto algo que en realidad ya estaba resuelto, y
+  cualquier resolución a mano en ese punto arriesga con duplicar bloques de
+  código enteros en vez de sustituirlos. Es justo lo que ocurrió el
+  2026-09-14 con las ramas apiladas de la fase 2: más de una hora perdida
+  arreglando en tres pull requests distintos un conflicto que no era real,
+  solo apariencia de conflicto por historias divergentes.
 
 ## Fases (no adelantes trabajo de fases futuras)
 0. Preparación: proyecto, linter, tests, CI, tipos del dominio, deploy vacío.

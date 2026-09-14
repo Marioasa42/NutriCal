@@ -1291,3 +1291,50 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   compilador a la propia lápida. Queda sin resolver a propósito el deshacer de un
   borrado hecho en **otra** pantalla o en otra visita; si hiciera falta, eso es
   una papelera y es otra decisión.
+
+## D-043 La zona horaria se lee del perfil, no del navegador
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: `time-zone.ts` preguntaba al navegador con
+  `Intl.DateTimeFormat().resolvedOptions().timeZone` y lo anotaba desde el paso 4
+  de la fase 1: *"el dominio ya tiene `UserProfile.timeZone`, pero todavía no hay
+  ninguna pantalla que lo escriba (…) en la fase 2 esta función pasará a leer de
+  ahí"*. Con la fase 2 arrancando, `Profile` existe pero nadie lo crea ni lo
+  edita, así que no había ningún perfil del que leer.
+- **Decisión**: se crea `createProfile`, que fabrica el perfil inicial con los
+  valores del navegador como propuesta de partida (D-006 del proyecto: nadie se
+  registra para usar la aplicación, así que el perfil se crea solo, sin
+  formulario, al primer arranque). `ProfileProvider` lo lee una vez con
+  `useQuery` y no pinta el árbol hasta tenerlo; `useTimeZone()` es desde ahora el
+  único sitio permitido para preguntar la zona horaria, y `time-zone.ts` queda
+  reducido a lo que de verdad es: la opinión del navegador, usada solo para
+  proponer un valor inicial y para la pantalla de ajustes.
+- **Por qué**: la pieza que el comentario original no mencionaba es que preguntar
+  al navegador es **síncrono** y leer un perfil de IndexedDB es **asíncrono**, así
+  que el cambio no podía ser la línea que prometía. La salida es un componente que
+  espera antes de pintar nada: el coste es un parpadeo de milisegundos al abrir
+  —es disco local, no red—, y a cambio toda la aplicación por debajo sigue
+  pudiendo preguntar la zona horaria de forma síncrona, sin repartir un
+  "todavía no lo sé" por cada pantalla que la necesite.
+  Guardarlo en el perfil y no solo en el navegador es lo que resuelve el caso que
+  de verdad importa: si tu perfil dice Europe/Madrid y abres la aplicación desde
+  Nueva York, tu diario tiene que seguir partiendo los días como en Madrid. Un
+  viaje no debe reescribir a qué día pertenece la cena de ayer.
+- **Alternativa descartada**: (a) `useQuery` con el valor del navegador como dato
+  inicial, que no espera nada pero falla justo en el caso que importa: pintaría
+  primero el día según el navegador y saltaría al del perfil después, y
+  `TodayRedirect` ya te habría mandado al día equivocado antes del salto; (b)
+  seguir preguntando al navegador y guardar la zona en el perfil solo como dato
+  informativo sin que nada la lea, que es no hacer el cambio y dejar la promesa
+  del paso 4 sin cumplir; (c) pedir la zona horaria en un formulario de
+  bienvenida antes de poder usar la aplicación, que es una cuenta con otro
+  nombre y choca con la decisión 6 del proyecto.
+- **Consecuencias**: `ProfileProvider` tiene que envolver el árbol de rutas y no
+  al revés, porque `TodayRedirect` y `DayPage` leen `useTimeZone()` antes de
+  decidir nada. Aparece la primera pantalla de ajustes (`/ajustes`), con solo la
+  zona horaria por ahora: el resto de preferencias de `DisplayPreferences` y los
+  datos corporales llegan cuando tengan una razón para pedirse. La zona horaria
+  se puede teclear a mano cuando `Intl.supportedValuesOf` no está disponible,
+  que es la decisión 7 del proyecto aplicada aquí: la misma regla que exige poder
+  teclear un código de barras cuando no hay cámara.

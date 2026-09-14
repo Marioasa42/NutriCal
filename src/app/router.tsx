@@ -8,6 +8,7 @@ import { EditEntryPage } from '@/features/diary/EditEntryPage';
 import { LogEntryPage } from '@/features/diary/LogEntryPage';
 import { BarcodePage } from '@/features/food-search/BarcodePage';
 import { SearchPage } from '@/features/food-search/SearchPage';
+import { SettingsPage } from '@/features/profile/SettingsPage';
 
 /**
  * El mapa de rutas, en un archivo aparte del que monta la aplicación.
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       // Editar uno que ya existe. "Registrar" es el verbo y "registro" el
       // sustantivo: una crea y la otra corrige algo que ya está escrito.
       { path: 'dia/:date/registro/:entryId', Component: EditEntryPage },
+      { path: 'ajustes', Component: SettingsPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

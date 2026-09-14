@@ -24,8 +24,7 @@ export interface ParsedGoalsForm {
 }
 
 export type GoalsFormResult =
-  | { readonly kind: 'valid'; readonly values: ParsedGoalsForm }
-  | { readonly kind: 'invalid' };
+  { readonly kind: 'valid'; readonly values: ParsedGoalsForm } | { readonly kind: 'invalid' };
 
 /**
  * Un número no negativo, admitiendo coma decimal.

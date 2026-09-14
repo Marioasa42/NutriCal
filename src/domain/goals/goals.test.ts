@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { goalsEffectiveOn, isEnergyGoalAllowed, minEnergyGoalFor, type DailyGoals } from '@/domain/goals/goals';
+import {
+  goalsEffectiveOn,
+  isEnergyGoalAllowed,
+  minEnergyGoalFor,
+  type DailyGoals,
+} from '@/domain/goals/goals';
 import type { GoalsId } from '@/domain/identity/ids';
 import { instant, localDate } from '@/domain/time/local-date';
 import { grams, kilocalories } from '@/domain/units/units';

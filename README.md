@@ -34,6 +34,20 @@ npm install
 npm run dev
 ```
 
+`npm run dev` sirve el frontend **y** las funciones de `api/` en el mismo
+servidor y el mismo puerto: no hace falta `vercel dev`, ni un segundo proceso,
+ni una cuenta de Vercel para poder buscar un alimento en local. Un plugin de
+Vite (`vite.config.ts`) intercepta las peticiones a `/api/*`, localiza el
+archivo de `api/` que le corresponde y llama a su función `GET` con un objeto
+`Request` de verdad, tal y como haría Vercel en producción. Los detalles y las
+alternativas descartadas están en `DECISIONS.md`, entrada D-051.
+
+Para que las búsquedas de micronutrientes (USDA FoodData Central) funcionen en
+local, copia `.env.example` a `.env.local` y rellena `USDA_API_KEY` con una
+clave gratuita de https://fdc.nal.usda.gov/api-key-signup. Sin ella, esas
+búsquedas fallan con un error controlado en lugar de un fallo confuso; Open
+Food Facts no necesita clave y funciona sin este paso.
+
 ## Scripts
 
 | Script                 | Qué hace                                              |

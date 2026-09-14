@@ -1714,3 +1714,54 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   una decisión ya cerrada. Sin pantalla propia todavía: no hay ninguna forma de
   fijar un objetivo por micronutriente desde la interfaz, así que
   `targetSource` vale siempre `'reference'` en la práctica hasta que exista una.
+## D-051 `npm run dev` sirve `api/` con un plugin de Vite, no con `vercel dev` ni un segundo proceso
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: `vite.config.ts` nunca tuvo proxy hacia `/api`, y Vite no
+  ejecuta las funciones serverless de la carpeta `api/`: son un proyecto de
+  TypeScript aparte, con su propio `tsconfig.api.json`, pensado para correr en
+  el entorno de funciones de Vercel. Con `npm run dev`, cualquier petición a
+  `/api/off/search` caía en la reescritura de `vercel.json`
+  (`/((?!api/).*) → /index.html`, que en local nadie aplica) o, sin ella,
+  directamente en un 404 de Vite. Quien clonara el repositorio no podía probar
+  la búsqueda, que es el flujo central de la aplicación.
+- **Decisión**: un plugin de Vite (`localApiFunctions` en `vite.config.ts`)
+  intercepta, solo en modo desarrollo (`apply: 'serve'`), cualquier petición a
+  `/api/*`. Localiza el archivo de `api/` que le corresponde con el mismo
+  criterio de carpetas que usa Vercel (un segmento literal, o si no existe uno
+  entre corchetes), lo carga con `server.ssrLoadModule` -Vite transformando el
+  TypeScript, no un `tsc` aparte- y llama a su función `GET` exportada con un
+  `Request` de verdad, tal y como la llamaría Vercel en producción. Ningún
+  archivo de `api/` cambia: ya estaban escritos con la firma
+  `(request: Request) => Promise<Response>` que exige el runtime de Vercel, así
+  que el plugin es un puente y no una adaptación.
+
+  De paso, `vite.config.ts` vuelca `.env`/`.env.local` en `process.env` con
+  `loadEnv`, porque `requireApiKey` (`api/_lib/usda.ts`) lee `process.env`
+  directamente y no `import.meta.env`, que es donde Vite pone solo las
+  variables con prefijo `VITE_`.
+- **Por qué**: de las tres formas de resolver esto, es la única sin fricción
+  nueva. `npm install && npm run dev` sigue siendo el único comando, sin clave
+  de cuenta, sin segundo proceso que recordar arrancar y sin ninguna
+  dependencia añadida al proyecto.
+- **Alternativa descartada**: (a) `vercel dev`, que en su primer uso pide
+  iniciar sesión y vincular el proyecto a una cuenta de Vercel: fricción real
+  para quien solo quiere clonar el repositorio y mirarlo, que es exactamente
+  el caso de uso de un portfolio; (b) un proxy de Vite hacia `vercel dev`
+  corriendo aparte (con `concurrently` u otro gestor de dos procesos), que
+  añade una dependencia nueva y sigue arrastrando el problema de (a) porque
+  `vercel dev` tiene que arrancar de todos modos; (c) documentar sin más que
+  hay que usar `vercel dev`, que es la opción que el mensaje que originó esta
+  decisión pedía evitar: "un desarrollador que clone el repositorio no puede
+  arrancarlo" seguiría siendo cierto para quien no tenga cuenta de Vercel.
+- **Consecuencias**: este simulador es MÁS generoso que Vercel en un punto
+  concreto, y conviene no olvidarlo al leer el código: `server.ssrLoadModule`
+  cachea el módulo entre peticiones mientras el servidor de desarrollo siga
+  vivo, así que aquí el cubo de fichas de `rate-limit.ts` sí comparte memoria
+  entre peticiones, cosa que D-041 documentó que NO ocurre en las funciones
+  reales de Vercel. Probar de verdad un límite de ritmo exige el despliegue,
+  no este puente. El resolutor de rutas (`resolveApiHandlerFile`) solo admite
+  un segmento dinámico como último tramo de la ruta, que es lo único que
+  existe hoy en `api/`; si algún día hiciera falta anidar una carpeta
+  dinámica dentro de otra, es la única función que tocar.

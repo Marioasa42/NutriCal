@@ -13,10 +13,25 @@ import { formatEnergy, formatGrams, listMacroLabels } from '@/shared/lib/nutrien
  * menos resultados de los que hay. Lo que no se puede hacer es enseñarlos
  * apagados y sin explicación, porque un elemento gris sin motivo parece un fallo
  * de la aplicación y no una decisión.
+ *
+ * Lo que se puede hacer con el resultado llega por `action`, como un hueco que
+ * rellena quien usa la tarjeta. La búsqueda pone un enlace para añadirlo al
+ * diario y la pantalla de un código de barras pone el formulario que completa
+ * lo que falta. La tarjeta no sabe cuál de las dos cosas es, y así la misma
+ * sirve en las dos pantallas sin llevar dentro una bandera por cada sitio desde
+ * el que se la llama.
  */
 
-/** El marco común. Ninguna de las dos tarjetas es accionable todavía. */
-function Card({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
+/** El marco común, con un hueco al final para la acción que corresponda. */
+function Card({
+  children,
+  action,
+  muted = false,
+}: {
+  children: ReactNode;
+  action?: ReactNode;
+  muted?: boolean;
+}) {
   return (
     <li
       className={`rounded-lg border p-4 ${
@@ -24,6 +39,7 @@ function Card({ children, muted = false }: { children: ReactNode; muted?: boolea
       }`}
     >
       {children}
+      {action === undefined ? null : <div className="mt-3">{action}</div>}
     </li>
   );
 }
@@ -42,10 +58,10 @@ function PerHundred({ unit }: { unit: 'g' | 'ml' }) {
   return <span className="text-xs text-slate-500">por 100 {unit}</span>;
 }
 
-export function FoodCard({ food }: { food: Food }) {
+export function FoodCard({ food, action }: { food: Food; action?: ReactNode }) {
   const { macros } = food.per100;
   return (
-    <Card>
+    <Card action={action}>
       <div className="flex items-start justify-between gap-4">
         <Title name={food.name} {...(food.brand === undefined ? {} : { brand: food.brand })} />
         <div className="flex shrink-0 flex-col items-end">
@@ -78,9 +94,9 @@ function Macro({ label, value }: { label: string; value: string }) {
  * verdad, qué falta exactamente, y cuándo se va a poder arreglar. Sin la tercera,
  * quien lo lea no sabe si esperar algo o darlo por perdido.
  */
-export function DraftCard({ draft }: { draft: FoodDraft }) {
+export function DraftCard({ draft, action }: { draft: FoodDraft; action?: ReactNode }) {
   return (
-    <Card muted>
+    <Card muted action={action}>
       <div className="flex items-start justify-between gap-4">
         <Title name={draft.name} {...(draft.brand === undefined ? {} : { brand: draft.brand })} />
         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
@@ -88,8 +104,8 @@ export function DraftCard({ draft }: { draft: FoodDraft }) {
         </span>
       </div>
       <p className="mt-3 text-sm text-slate-600">
-        Open Food Facts no aporta {listMacroLabels(draft.missing)} de este producto. Podrás
-        rellenarlo a mano al añadirlo al diario, en el paso siguiente.
+        Open Food Facts no aporta {listMacroLabels(draft.missing)} de este producto. Puedes
+        rellenarlo a mano y quedará marcado como estimación.
       </p>
     </Card>
   );

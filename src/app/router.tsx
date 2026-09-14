@@ -4,6 +4,7 @@ import { DayPage } from '@/app/routes/DayPage';
 import { NotFoundPage } from '@/app/routes/NotFoundPage';
 import { RootLayout } from '@/app/routes/RootLayout';
 import { TodayRedirect } from '@/app/routes/TodayRedirect';
+import { LogEntryPage } from '@/features/diary/LogEntryPage';
 import { BarcodePage } from '@/features/food-search/BarcodePage';
 import { SearchPage } from '@/features/food-search/SearchPage';
 
@@ -28,6 +29,11 @@ export const router = createBrowserRouter([
       { path: 'dia/:date', Component: DayPage },
       { path: 'dia/:date/buscar', Component: SearchPage },
       { path: 'dia/:date/codigo/:barcode', Component: BarcodePage },
+      // Registrar un alimento concreto en un día. El alimento viaja como
+      // identificador del catálogo local, por el mismo motivo que el código de
+      // barras viaja en la URL (D-032): quien lo produce no tiene que saber qué
+      // pasa después.
+      { path: 'dia/:date/registrar/:foodId', Component: LogEntryPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

@@ -7,8 +7,9 @@ import { formatLocalDate, formatLocalDateShort } from '@/shared/lib/format-date'
 import { currentTimeZone } from '@/shared/lib/time-zone';
 
 /**
- * El diario de un día. De momento solo el marco: la fecha, la navegación entre
- * días y un hueco. Los registros de comida llegan en el paso siguiente.
+ * El diario de un día. De momento el marco: la fecha, la navegación entre días y
+ * la entrada a la búsqueda. Registrar ya funciona y escribe en Dexie; enseñar
+ * la lista del día y sus totales llega en el paso siguiente.
  *
  * Lo que sí está terminado es la relación entre la URL y el día, que es la parte
  * que D-010 quería tener resuelta pronto: el día vive en la ruta, así que el
@@ -54,7 +55,8 @@ function Day({ date }: { date: LocalDate }) {
 
       <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-slate-300 p-6 text-center">
         <p className="text-slate-500">
-          Todavía no hay registros de este día. El diario llega en el paso siguiente.
+          Lo que añadas se guarda en este dispositivo. La lista del día y los totales llegan en el
+          paso siguiente.
         </p>
         <Link
           to={`/dia/${date}/buscar`}

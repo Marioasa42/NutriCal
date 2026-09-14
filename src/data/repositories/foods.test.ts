@@ -109,6 +109,56 @@ describe('repositorio de alimentos', () => {
     });
   });
 
+  describe('adoptar un alimento de la búsqueda', () => {
+    it('lo guarda si no lo conocíamos', async () => {
+      const yogurt = makeFood({ name: 'Yogur natural', barcode: '8410128750121' });
+
+      const adopted = await foods.adopt(yogurt);
+
+      expect(adopted.id).toBe(yogurt.id);
+      expect(await foods.byId(yogurt.id)).toEqual(yogurt);
+    });
+
+    it('reutiliza el que ya estaba en vez de duplicarlo', async () => {
+      // La normalización genera un identificador nuevo en cada llamada, así que
+      // el mismo producto buscado dos veces llega con dos identificadores. Sin
+      // esto, el catálogo acabaría con una fila por búsqueda.
+      const first = makeFood({ name: 'Yogur natural', barcode: '8410128750121' });
+      const second = makeFood({ name: 'Yogur natural', barcode: '8410128750121' });
+      expect(second.id).not.toBe(first.id);
+
+      await foods.adopt(first);
+      const adopted = await foods.adopt(second);
+
+      expect(adopted.id).toBe(first.id);
+      expect(await foods.all()).toHaveLength(1);
+    });
+
+    it('no pisa las cifras completadas a mano con las de la fuente', async () => {
+      const completed = {
+        ...makeFood({ name: 'Pan de centeno', barcode: '8480000123456' }),
+        completion: { userFilled: ['protein'] as const, completedAt: anInstant() },
+      };
+      await foods.adopt(completed);
+
+      // La misma búsqueda vuelve a traer el producto, sin las estimaciones.
+      const fromSource = makeFood({ name: 'Pan de centeno', barcode: '8480000123456' });
+      const adopted = await foods.adopt(fromSource);
+
+      expect(adopted.completion.userFilled).toEqual(['protein']);
+    });
+
+    it('guarda tal cual lo que no tiene código de barras', async () => {
+      // Dos manzanas creadas a mano son dos alimentos distintos: no hay nada
+      // con lo que compararlas.
+      const first = await foods.adopt(makeFood({ name: 'Manzana' }));
+      const second = await foods.adopt(makeFood({ name: 'Manzana' }));
+
+      expect(second.id).not.toBe(first.id);
+      expect(await foods.all()).toHaveLength(2);
+    });
+  });
+
   describe('búsqueda por texto', () => {
     beforeEach(async () => {
       await foods.saveMany([

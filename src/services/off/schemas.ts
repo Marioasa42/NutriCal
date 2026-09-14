@@ -18,11 +18,23 @@ import { z } from 'zod';
  * la decisión D-001 prohíbe.
  */
 
-/** Los códigos de error que producen nuestras propias funciones serverless. */
+/**
+ * Los códigos de error que producen nuestras propias funciones serverless.
+ *
+ * Esta lista tiene que llevar TODOS los miembros de `ErrorCode` de
+ * `api/_lib/http.ts`. Es una lista cerrada de Zod, así que un código que
+ * produzcan las funciones y falte aquí no da un error ruidoso: hace que la
+ * envoltura entera no valide y el cliente se caiga a adivinar el código por el
+ * estado HTTP, que es peor que fallar, porque el error sigue llegando y llega
+ * con el nombre equivocado. La comprobación de que no se desincronizan está
+ * debajo de `apiErrorSchema`.
+ */
 export const API_ERROR_CODES = [
   'invalid_request',
   'not_found',
   'rate_limited',
+  'upstream_rate_limited',
+
   'upstream_error',
   'upstream_timeout',
 ] as const;

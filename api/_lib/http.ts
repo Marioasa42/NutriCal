@@ -18,8 +18,27 @@ export const CACHE_NOT_FOUND = 'public, s-maxage=300';
 /** Los errores no se cachean nunca: el siguiente intento debe poder funcionar. */
 export const CACHE_NONE = 'no-store';
 
+/**
+ * `rate_limited` y `upstream_rate_limited` son dos límites distintos y no se
+ * pueden confundir, aunque los dos se devuelvan con un 429.
+ *
+ * El primero es NUESTRO cubo de fichas: la petición se rechaza aquí y nunca sale
+ * a la red, así que no le cuesta nada a la fuente. El segundo es el límite de
+ * Open Food Facts: la petición sí salió y ellos la rechazaron.
+ *
+ * Distinguirlos no es cosmética. Los dos obligan a esperar, pero solo el segundo
+ * significa que ya le hemos hecho daño a una dirección IP compartida, y solo
+ * mirando los registros por separado se puede saber si un arreglo ha funcionado.
+ * Antes los dos casos se mezclaban dentro de `upstream_error`, que además estaba
+ * marcado como reintentable: ver D-040.
+ */
 export type ErrorCode =
-  'invalid_request' | 'not_found' | 'rate_limited' | 'upstream_error' | 'upstream_timeout';
+  | 'invalid_request'
+  | 'not_found'
+  | 'rate_limited'
+  | 'upstream_rate_limited'
+  | 'upstream_error'
+  | 'upstream_timeout';
 
 export interface ApiError {
   readonly error: {

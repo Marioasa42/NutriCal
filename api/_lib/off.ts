@@ -91,6 +91,24 @@ export function parsePage(raw: string | null): number {
 export interface UpstreamResult {
   readonly status: number;
   readonly body: unknown;
+  /**
+   * Lo que la fuente pide esperar, si lo dice. Solo llega con un 429.
+   *
+   * Se recoge aquí, y no se descarta como el resto de la respuesta fallida,
+   * porque es el único dato fiable sobre cuánto dura su límite: cualquier otra
+   * cifra que pusiéramos nosotros sería inventada.
+   */
+  readonly retryAfterSeconds?: number;
+}
+
+/** El `retry-after` de la fuente, en segundos, si viene y es un número usable. */
+function upstreamRetryAfter(response: Response): number | undefined {
+  const raw = response.headers.get('retry-after');
+  if (raw === null) {
+    return undefined;
+  }
+  const seconds = Number.parseInt(raw, 10);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
 }
 
 /**
@@ -110,7 +128,12 @@ export async function fetchUpstream(
   });
 
   if (!response.ok) {
-    return { status: response.status, body: null };
+    const retryAfterSeconds = upstreamRetryAfter(response);
+    return {
+      status: response.status,
+      body: null,
+      ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+    };
   }
 
   return { status: response.status, body: await response.json() };

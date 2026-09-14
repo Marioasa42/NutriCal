@@ -12,10 +12,15 @@ describe('shouldRetryOffQuery', () => {
     expect(shouldRetryOffQuery(0, error('upstream_timeout'))).toBe(true);
   });
 
-  it('nunca reintenta un límite de ritmo', () => {
+  it('nunca reintenta un límite de ritmo, venga de donde venga', () => {
     // El más importante de todos: insistir contra el límite de Open Food Facts
     // gasta los intentos de todo el mundo que comparta la IP de Vercel (D-013).
     expect(shouldRetryOffQuery(0, error('rate_limited'))).toBe(false);
+
+    // Este es el que faltaba y costó siete 502 en cuarenta segundos (D-040). El
+    // límite de la fuente llegaba como `upstream_error`, que sí se reintenta, así
+    // que cada rechazo suyo producía dos peticiones más contra ella.
+    expect(shouldRetryOffQuery(0, error('upstream_rate_limited'))).toBe(false);
   });
 
   it('no reintenta lo que va a responder igual', () => {
@@ -24,9 +29,11 @@ describe('shouldRetryOffQuery', () => {
     expect(shouldRetryOffQuery(0, error('malformed_response'))).toBe(false);
   });
 
-  it('se rinde a los dos intentos', () => {
-    expect(shouldRetryOffQuery(1, error('network'))).toBe(true);
-    expect(shouldRetryOffQuery(2, error('network'))).toBe(false);
+  it('se rinde a un solo reintento', () => {
+    // Bajado de dos a uno tras medir la carga saliente real (D-040). Dos intentos
+    // en total: el original y uno más.
+    expect(shouldRetryOffQuery(0, error('network'))).toBe(true);
+    expect(shouldRetryOffQuery(1, error('network'))).toBe(false);
   });
 
   it('no reintenta un error que no sea nuestro', () => {

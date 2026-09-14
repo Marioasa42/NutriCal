@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { DayTotals } from '@/domain/diary/day';
 import type { DailyGoals } from '@/domain/goals/goals';
 import { newGoalsId } from '@/domain/identity/ids';
-import { buildMicronutrientPanel, buildMicronutrientRow } from '@/domain/nutrition/micronutrient-panel';
+import {
+  buildMicronutrientPanel,
+  buildMicronutrientRow,
+} from '@/domain/nutrition/micronutrient-panel';
 import { referenceIntakeFor, upperLimitFor } from '@/domain/nutrition/reference-intakes';
 import { instant, localDate } from '@/domain/time/local-date';
 import { grams, kilocalories, micrograms, milligrams } from '@/domain/units/units';

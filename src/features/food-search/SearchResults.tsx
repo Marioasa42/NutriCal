@@ -1,5 +1,7 @@
 import type { FoodDraft } from '@/domain/food/draft';
+import type { LocalDate } from '@/domain/time/local-date';
 import { DraftCard, FoodCard } from '@/features/food-search/FoodResultCard';
+import { AddToDiaryLink, CompleteDraftLink } from '@/features/food-search/ResultActions';
 import type { FoodSearchPage } from '@/services/off';
 
 /**
@@ -9,7 +11,7 @@ import type { FoodSearchPage } from '@/services/off';
  * un orden por calidad de los datos por gusto: quien busca quiere registrar algo,
  * y lo que puede registrar sin trabajo extra debe estar arriba.
  */
-export function SearchResults({ page }: { page: FoodSearchPage }) {
+export function SearchResults({ page, date }: { page: FoodSearchPage; date: LocalDate }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-slate-500">
@@ -18,10 +20,14 @@ export function SearchResults({ page }: { page: FoodSearchPage }) {
 
       <ul className="flex flex-col gap-3">
         {page.foods.map((food) => (
-          <FoodCard key={food.id} food={food} />
+          <FoodCard key={food.id} food={food} action={<AddToDiaryLink date={date} food={food} />} />
         ))}
         {page.drafts.map((draft) => (
-          <DraftCard key={draftKey(draft)} draft={draft} />
+          <DraftCard
+            key={draftKey(draft)}
+            draft={draft}
+            action={<CompleteDraftLink date={date} draft={draft} />}
+          />
         ))}
       </ul>
 

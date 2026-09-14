@@ -33,6 +33,40 @@ export function createFoodRepository(database: NutriCalDatabase) {
     },
 
     /**
+     * Mete en el catálogo un alimento recién traído de la búsqueda, y devuelve
+     * el que hay que usar a partir de ahora.
+     *
+     * Si ya conocíamos ese código de barras, se devuelve el que estaba guardado
+     * y NO se sobrescribe. Los dos motivos, por orden de importancia:
+     *
+     * 1. La normalización genera un identificador nuevo en cada llamada (lo
+     *    necesita para no leer el reloj ni el generador por dentro), así que
+     *    añadir dos veces el mismo yogur crearía dos filas para el mismo
+     *    producto, con la búsqueda local devolviendo el mismo alimento repetido.
+     * 2. La copia guardada puede llevar cifras completadas a mano (D-002), y la
+     *    recién traída de la fuente nunca las lleva. Sobrescribir sería tirar
+     *    trabajo de la persona usuaria sin avisar.
+     *
+     * Un alimento sin código de barras no se puede comparar con nada, así que se
+     * guarda tal cual: dos manzanas creadas a mano son dos alimentos distintos
+     * mientras nadie diga lo contrario.
+     */
+    async adopt(food: Food): Promise<Food> {
+      if (food.source.kind === 'openFoodFacts') {
+        const known = await database.foods
+          .where('[isDeleted+source.barcode]')
+          .equals([ALIVE, food.source.barcode])
+          .first();
+        if (known !== undefined) {
+          return fromStoredFood(known);
+        }
+      }
+
+      await database.foods.put(toStoredFood(food));
+      return food;
+    },
+
+    /**
      * Devuelve el alimento solo si no está borrado. Aquí la comprobación sigue
      * siendo en memoria porque la lectura es por clave primaria y devuelve una
      * sola fila: no hay nada que un índice pueda ahorrar.

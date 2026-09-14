@@ -1,5 +1,6 @@
 import { useQuery, type FetchStatus } from '@tanstack/react-query';
 
+import { adoptSearchResults } from '@/features/food-search/adopt-results';
 import { searchFoods, type FoodSearchPage } from '@/services/off';
 import { isSearchable } from '@/shared/lib/text';
 import { normalizeForSearch } from '@contracts/text';
@@ -87,7 +88,11 @@ export function useFoodSearch(query: string): FoodSearchResult {
     // "platano" comparten entrada de caché, que es la misma clave con la que la
     // función serverless guarda su respuesta: las dos cachés aciertan a la vez.
     queryKey: ['off', 'search', normalizeForSearch(query)],
-    queryFn: ({ signal }) => searchFoods(query, { signal }),
+    // Los resultados pasan por el catálogo local antes de llegar a la pantalla.
+    // Es D-013 aplicado ("todo alimento consultado se guarda en Dexie") y lo que
+    // hace que cada tarjeta tenga un identificador que existe en disco, de modo
+    // que añadir al diario sea un enlace y no un botón que escribe.
+    queryFn: async ({ signal }) => adoptSearchResults(await searchFoods(query, { signal })),
     enabled,
   });
 

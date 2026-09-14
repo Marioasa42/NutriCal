@@ -1,5 +1,6 @@
+import type { BaseUnit } from '@/domain/food/food';
 import type { MacroKey } from '@/domain/nutrition/macros';
-import type { Grams, Kilocalories } from '@/domain/units/units';
+import type { Grams, Kilocalories, Quantity } from '@/domain/units/units';
 
 /**
  * Nombres y formato de los nutrientes, para enseñarlos.
@@ -61,4 +62,20 @@ export function formatEnergy(value: Kilocalories, locale = 'es-ES'): string {
 
 export function formatGrams(value: Grams, locale = 'es-ES'): string {
   return `${numberFormat(locale, GRAMS_DIGITS).format(value)} g`;
+}
+
+/**
+ * Una cantidad de alimento, en la unidad base que le corresponda.
+ *
+ * No es lo mismo que `formatGrams` aunque se le parezca: aquí no se mide un
+ * nutriente sino cuánto se comió, y la unidad la trae el alimento porque puede
+ * ser masa o volumen (D-005). Los mismos decimales que los gramos, por el mismo
+ * motivo: media ración de algo pequeño no puede quedarse en cero.
+ *
+ * Vive aquí, y no en la pantalla que lo enseña, porque D-023 y D-030 dicen que
+ * el redondeo ocurre en este módulo y en ninguno más. Un `toFixed` suelto en un
+ * componente sería una segunda regla de redondeo escondida.
+ */
+export function formatQuantity(value: Quantity, unit: BaseUnit, locale = 'es-ES'): string {
+  return `${numberFormat(locale, GRAMS_DIGITS).format(value)} ${unit}`;
 }

@@ -21,8 +21,9 @@ import { formatLocalDate } from '@/shared/lib/format-date';
  *
  * La búsqueda cuelga del día en la URL, `/dia/:date/buscar`, y no es una ruta
  * suelta: se busca para añadir algo a un día, así que el día no puede faltar, y
- * el botón de atrás vuelve al diario sin escribir nada. Seleccionar un resultado
- * y registrarlo llega en el paso siguiente; aquí se cierra encontrar.
+ * el botón de atrás vuelve al diario sin escribir nada. Cada resultado lleva ya
+ * al formulario que lo registra, porque encontrar algo y no poder añadirlo no
+ * es media funcionalidad, es ninguna.
  */
 export function SearchPage() {
   const { date: rawDate = '' } = useParams<{ date: string }>();
@@ -108,7 +109,7 @@ function Search({ date }: { date: LocalDate }) {
       case 'empty':
         return <EmptyState query={state.query} />;
       case 'results':
-        return <SearchResults page={state.page} />;
+        return <SearchResults page={state.page} date={date} />;
     }
   }
 }

@@ -2,6 +2,7 @@ import { useQuery, type FetchStatus } from '@tanstack/react-query';
 
 import type { FoodDraft } from '@/domain/food/draft';
 import type { Food } from '@/domain/food/food';
+import { adoptLookup } from '@/features/food-search/adopt-results';
 import { findFoodByBarcode, type BarcodeLookup } from '@/services/off';
 import { isValidBarcode } from '@contracts/barcode';
 
@@ -82,7 +83,9 @@ export function useBarcodeLookup(barcode: string): BarcodeLookupResult {
 
   const result = useQuery({
     queryKey: ['off', 'product', barcode],
-    queryFn: ({ signal }) => findFoodByBarcode(barcode, { signal }),
+    // Igual que en la búsqueda: lo que llega pasa por el catálogo local, así el
+    // alimento encontrado ya tiene un identificador con el que enlazar (D-013).
+    queryFn: async ({ signal }) => adoptLookup(await findFoodByBarcode(barcode, { signal })),
     enabled,
   });
 

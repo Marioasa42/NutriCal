@@ -5,7 +5,9 @@ import { InvalidDate } from '@/app/routes/InvalidDate';
 import type { FoodDraft } from '@/domain/food/draft';
 import type { Food } from '@/domain/food/food';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
+import { DraftCompletionForm } from '@/features/food-search/DraftCompletionForm';
 import { DraftCard, FoodCard } from '@/features/food-search/FoodResultCard';
+import { AddToDiaryLink } from '@/features/food-search/ResultActions';
 import { ErrorState, LoadingState, OfflineState } from '@/features/food-search/SearchStates';
 import { useBarcodeLookup } from '@/features/food-search/useBarcodeLookup';
 import { formatLocalDate } from '@/shared/lib/format-date';
@@ -71,9 +73,9 @@ function Lookup({ date, barcode }: { date: LocalDate; barcode: string }) {
       case 'unreadable':
         return <Unreadable reason={state.reason} />;
       case 'complete':
-        return <Found food={state.food} />;
+        return <Found date={date} food={state.food} />;
       case 'needsCompletion':
-        return <FoundDraft draft={state.draft} />;
+        return <FoundDraft date={date} draft={state.draft} />;
     }
   }
 }
@@ -113,8 +115,8 @@ function NotFound({ barcode }: { barcode: string }) {
     <Panel>
       <p className="font-medium text-slate-900">No lo encontramos</p>
       <p className="text-slate-600">
-        Open Food Facts no tiene ningún producto con el código {barcode}. Podrás crearlo a mano y
-        guardarlo en tu lista, en el paso siguiente.
+        Open Food Facts no tiene ningún producto con el código {barcode}. Comprueba que lo has
+        copiado bien; crear un alimento a mano desde cero llega más adelante.
       </p>
     </Panel>
   );
@@ -133,7 +135,8 @@ function Unreadable({ reason }: { reason: string }) {
       <p className="font-medium text-slate-900">Lo encontramos, pero no lo entendemos</p>
       <p className="text-slate-600">
         Open Food Facts tiene ese código, pero los datos que devuelve no se pueden interpretar (
-        {reason}). Podrás crearlo a mano en el paso siguiente.
+        {reason}). Busca el producto por su nombre: a veces hay otra ficha del mismo con los datos
+        bien.
       </p>
     </Panel>
   );
@@ -143,18 +146,25 @@ function Result({ children }: { children: ReactNode }) {
   return <ul className="flex flex-col gap-3">{children}</ul>;
 }
 
-function Found({ food }: { food: Food }) {
+function Found({ date, food }: { date: LocalDate; food: Food }) {
   return (
     <Result>
-      <FoodCard food={food} />
+      <FoodCard food={food} action={<AddToDiaryLink date={date} food={food} />} />
     </Result>
   );
 }
 
-function FoundDraft({ draft }: { draft: FoodDraft }) {
+/**
+ * El borrador se completa aquí mismo, en el hueco de la tarjeta.
+ *
+ * No hace falta otra pantalla: ya estamos en la dirección del producto, el
+ * borrador está delante, y mandar a un tercer sitio para teclear cuatro números
+ * solo añadiría una vuelta y un estado más que llevar de una pantalla a otra.
+ */
+function FoundDraft({ date, draft }: { date: LocalDate; draft: FoodDraft }) {
   return (
     <Result>
-      <DraftCard draft={draft} />
+      <DraftCard draft={draft} action={<DraftCompletionForm date={date} draft={draft} />} />
     </Result>
   );
 }

@@ -157,6 +157,31 @@ export function useRemoveMeal(date: LocalDate) {
   });
 }
 
+/**
+ * Deshacer un borrado, que es quitar la lápida (D-042).
+ *
+ * Es la gemela exacta de `useRemoveMeal` y invalida las mismas dos claves. Que
+ * exista es lo que hace que borrar deje de ser definitivo desde la interfaz, que
+ * era la premisa entera de D-038: aquella decisión razonaba que, como no había
+ * forma de recuperar nada, preguntar antes era lo mínimo. La confirmación se
+ * queda igualmente, porque protege de otra cosa distinta: del toque mal dado,
+ * no del arrepentimiento.
+ */
+export function useRestoreMeal(date: LocalDate) {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: MealEntryId) => diaryRepository.restoreMeal(id),
+    onSuccess: async (_result, id) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: dbKeys.mealsOn(date) }),
+        client.invalidateQueries({ queryKey: dbKeys.meal(id) }),
+      ]);
+    },
+    ...LOCAL,
+  });
+}
+
 /** Si el ejemplo está puesto, para saber qué botón ofrecer. */
 export function useExampleDataLoaded() {
   return useQuery({ queryKey: dbKeys.example, queryFn: () => seeder.isLoaded(), ...LOCAL });

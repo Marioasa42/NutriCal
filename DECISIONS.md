@@ -339,7 +339,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 ## D-016 El sembrado de datos de ejemplo se adelanta al paso 2 o 3 de la fase 1
 - **Fecha**: 2026-09-12
 - **Fase**: 1
-- **Estado**: aceptada
+- **Estado**: sustituida por D-039
 - **Contexto**: el sembrado estaba planificado para el último paso de la fase 1,
   junto a la pantalla del día. Pero cada previsualización de Vercel vive en su
   propio origen, y como IndexedDB está aislada por origen, toda previsualización
@@ -1087,7 +1087,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 ## D-038 Borrar un registro se confirma en dos pasos, y la lápida no se ofrece deshacer
 - **Fecha**: 2026-09-14
 - **Fase**: 1
-- **Estado**: pendiente de revisión
+- **Estado**: sustituida por D-042
 - **Contexto**: D-006 ya decidió que borrar escribe una lápida y nunca elimina la
   fila. Lo que no estaba decidido es qué ve quien pulsa "borrar".
 - **Decisión**: el botón pregunta antes, en la propia fila y sin diálogo del
@@ -1194,6 +1194,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 - **Fase**: 1
 - **Estado**: aceptada
 
+
 - **Estado**: propuesta
 - **Contexto**: el diagnóstico de D-040 destapó una causa anterior. Midiendo el
   par `useDebouncedValue` + `useFoodSearch` con el cliente y el `QueryClient`
@@ -1245,4 +1246,52 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   botones llamados Buscar en la misma pantalla, indistinguibles para un lector
   de pantalla, y que la consulta confirmada puede vivir en la URL en lugar de en
   un `useState`, lo que elimina el `useEffect` que sincronizaba las dos.
+
+## D-042 Borrar se confirma antes y se puede deshacer después, mientras no te vayas del día
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-038 decidió confirmar en dos pasos y **no** ofrecer deshacer, y
+  se dejó a sí misma en estado `pendiente de revisión` porque era una decisión de
+  interfaz tomada sobre la marcha para no bloquear el paso 6. Además nombró por
+  su nombre a su sustituta: *«un "deshacer" temporal tipo aviso flotante, que es
+  lo mejor de las tres para quien lo usa (…) Es la mejor candidata a sustituir a
+  esta decisión, y por eso queda anotada»*. Esta entrada la revisa.
+- **Decisión**: se mantiene la confirmación en dos pasos **y** se añade deshacer.
+  No son redundantes: la confirmación protege del toque mal dado en el móvil, y
+  el deshacer del arrepentimiento inmediato, que al registrar comidas es
+  corriente. Al borrar, la fila no desaparece: se convierte en un hueco apagado y
+  tachado, en su sitio, con un botón de "Deshacer". Como el borrado es por lápida
+  (D-006), deshacer es **quitar el campo** `deletedAt`, no escribir nada nuevo.
+  El deshacer dura mientras no te vayas de la pantalla del día.
+- **Por qué**: la premisa de D-038 era que, como desde la interfaz no había forma
+  de recuperar nada, el borrado era definitivo y preguntar era lo mínimo. Eso
+  seguía siendo verdad solo porque no habíamos escrito la vuelta, no porque el
+  modelo lo impidiera: la fila nunca se fue de la base de datos. Escribir la
+  vuelta cuesta una función de dominio y un método de repositorio.
+  Lo que hace barata la opción que D-038 descartó por cara es **dónde vive el
+  hueco**: en la lista, en el sitio del registro borrado, y no en un aviso
+  flotante. Así no hace falta ni componente de avisos, ni temporizador, ni
+  decidir qué pasa si te vas antes de que expire —te vas y se acabó el deshacer,
+  que es una regla que se explica sola—. Las tres objeciones de D-038 eran
+  objeciones al formato flotante, no al deshacer.
+- **Alternativa descartada**: (a) solo confirmación, que es D-038 y deja el
+  arrepentimiento sin salida; (b) aviso flotante con temporizador, el patrón que
+  todo el mundo conoce, pero con las tres piezas que D-038 enumeró y con la
+  pregunta sin respuesta de qué pasa al cambiar de pantalla; (c) una papelera con
+  lo borrado y un botón de recuperar, que resuelve más de lo que hace falta y
+  abre la pregunta de cuándo se purga; (d) quitar la confirmación ahora que hay
+  deshacer, que confunde dos problemas distintos: un toque accidental en una
+  lista no debería llegar a producir un hueco.
+- **Consecuencias**: el estado de "esto se acaba de borrar" **no puede vivir en
+  la fila**, porque al borrar el registro sale de la consulta y React desmonta
+  esa fila con su estado dentro; lo guarda la pantalla del día, que es quien
+  sobrevive. Los totales bajan en el momento del borrado y no esperan al
+  deshacer: para quien mira, lo borrado ya no cuenta, y que el total baje es
+  justamente lo que explica el hueco. `asRestored` es el reverso de `asDeleted` y
+  quita la clave en lugar de ponerla a `undefined`, que con
+  `exactOptionalPropertyTypes` ni siquiera compila: es D-001 aplicado por el
+  compilador a la propia lápida. Queda sin resolver a propósito el deshacer de un
+  borrado hecho en **otra** pantalla o en otra visita; si hiciera falta, eso es
+  una papelera y es otra decisión.
 

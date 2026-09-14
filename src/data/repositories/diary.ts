@@ -1,6 +1,6 @@
 import { db, type NutriCalDatabase } from '@/data/db';
 import { ALIVE, fromStored, toStored } from '@/data/stored';
-import { asDeleted } from '@/data/tombstone';
+import { asDeleted, asRestored } from '@/data/tombstone';
 import type { ExerciseEntry } from '@/domain/diary/exercise-entry';
 import type { MealEntry, MealSlot } from '@/domain/diary/meal-entry';
 import type { ExerciseEntryId, MealEntryId } from '@/domain/identity/ids';
@@ -61,6 +61,23 @@ export function createDiaryRepository(database: NutriCalDatabase) {
         return;
       }
       await database.mealEntries.put(toStored(asDeleted(fromStored(stored), at)));
+    },
+
+    /**
+     * Deshace un borrado quitando la lápida (D-042).
+     *
+     * No lanza si el registro no existe, por lo mismo que `removeMeal`: quien
+     * deshace pulsa un botón de una pantalla que puede llevar un rato abierta, y
+     * que la fila haya desaparecido por otra vía no es un fallo de programación
+     * que deba tumbar nada. Resucitar algo que ya estaba vivo tampoco hace daño:
+     * solo le mueve el `updatedAt`.
+     */
+    async restoreMeal(id: MealEntryId, at: Instant = now()): Promise<void> {
+      const stored = await database.mealEntries.get(id);
+      if (stored === undefined) {
+        return;
+      }
+      await database.mealEntries.put(toStored(asRestored(fromStored(stored), at)));
     },
 
     async saveExercise(entry: ExerciseEntry): Promise<void> {

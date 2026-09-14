@@ -65,6 +65,51 @@ describe('repositorio del diario', () => {
       expect(meals.map((meal) => meal.slot)).toEqual(['breakfast']);
       expect(await diary.mealById(removed.id)).toBeUndefined();
     });
+
+    it('deshacer un borrado devuelve el registro a las consultas', async () => {
+      const entry = makeMealEntry({ slot: 'lunch' });
+      await diary.saveMeal(entry);
+      await diary.removeMeal(entry.id);
+      expect(await diary.mealById(entry.id)).toBeUndefined();
+
+      await diary.restoreMeal(entry.id);
+
+      expect(await diary.mealById(entry.id)).toBeDefined();
+      expect((await diary.mealsOn(aDate('2026-09-12'))).map((meal) => meal.slot)).toEqual([
+        'lunch',
+      ]);
+    });
+
+    it('la ida y vuelta no cambia nada más que las marcas de tiempo', async () => {
+      // Lo que de verdad importa de deshacer: que el registro que vuelve sea el
+      // mismo que se borró, con su instantánea de nutrientes intacta (D-003).
+      const entry = makeMealEntry();
+      await diary.saveMeal(entry);
+      await diary.removeMeal(entry.id);
+      await diary.restoreMeal(entry.id);
+
+      const back = await diary.mealById(entry.id);
+      expect(back).toBeDefined();
+      const { updatedAt: _u, ...restOfBack } = back ?? {};
+      const { updatedAt: _v, ...restOfOriginal } = entry;
+      expect(restOfBack).toEqual(restOfOriginal);
+    });
+
+    it('deshacer algo que no existe no revienta', async () => {
+      // Se llega aquí desde una pantalla que puede llevar rato abierta, así que
+      // no es un fallo de programación: es una carrera normal.
+      await expect(diary.restoreMeal(makeMealEntry().id)).resolves.toBeUndefined();
+    });
+
+    it('deshacer no duplica: el registro vuelve una sola vez', async () => {
+      const entry = makeMealEntry();
+      await diary.saveMeal(entry);
+      await diary.removeMeal(entry.id);
+      await diary.restoreMeal(entry.id);
+      await diary.restoreMeal(entry.id);
+
+      expect(await diary.mealsOn(aDate('2026-09-12'))).toHaveLength(1);
+    });
   });
 
   describe('instantánea del alimento', () => {

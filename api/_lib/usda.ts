@@ -65,11 +65,39 @@ export function normalizeQuery(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
 
+/**
+ * Los únicos tipos de dato que USDA debe buscar, y por qué son estos dos y no
+ * los cuatro que existen.
+ *
+ * Comprobado contra la API real, no a ojo: `query=apple` sin filtrar da
+ * 25.709 resultados, y los tres primeros son "Branded" (productos de marca).
+ * Es justo el terreno que ya cubre Open Food Facts, y lo cubre mejor: es su
+ * especialidad. Con `dataType=Foundation,SR Legacy`, la misma búsqueda cae a
+ * 95 resultados y las tres primeras son manzanas de verdad ("Apples, fuji,
+ * with skin, raw"; "Apples, gala..."; "Apples, raw, without skin"). El mismo
+ * patrón se repitió con "broccoli". Sin este filtro, USDA no aporta nada que
+ * OFF no tuviera ya: duplica en vez de completar, que era el motivo entero
+ * de añadirlo (D-048).
+ *
+ * "Survey (FNDDS)" se deja fuera a propósito: es la base de encuestas
+ * dietéticas, con entradas de plato preparado ("Apple pie filling", "Carrots,
+ * raw, salad with apples"), no de ingrediente suelto. No es lo que faltaba
+ * cubrir.
+ *
+ * Esto no es un ajuste de relevancia que se pueda desactivar: es la
+ * definición de qué papel juega USDA en el proyecto. Por eso no es un
+ * parámetro de `buildSearchUrl`, sino una constante fijada aquí dentro: no
+ * existe ninguna llamada a esta función que pueda construir una URL sin el
+ * filtro puesto.
+ */
+const SEARCH_DATA_TYPES = ['Foundation', 'SR Legacy'] as const;
+
 export function buildSearchUrl(query: string, apiKey: string, pageSize: number): string {
   const url = new URL('foods/search', FDC_BASE);
   url.searchParams.set('api_key', apiKey);
   url.searchParams.set('query', normalizeQuery(query));
   url.searchParams.set('pageSize', String(pageSize));
+  url.searchParams.set('dataType', SEARCH_DATA_TYPES.join(','));
   return url.toString();
 }
 

@@ -152,6 +152,9 @@ function Search({ date }: { date: LocalDate }) {
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           En USDA FoodData Central
         </h2>
+        {usda.state.kind === 'idle' ? null : (
+          <SearchedAsNote original={submitted} searchedAs={usda.searchedAs} />
+        )}
         {renderUsda()}
       </section>
 
@@ -195,6 +198,26 @@ function Search({ date }: { date: LocalDate }) {
         return <UsdaSearchResults page={usda.state.page} date={date} knownIds={knownIds} />;
     }
   }
+}
+
+/**
+ * Qué se ha buscado de verdad en USDA, siempre visible y no solo cuando hay
+ * traducción.
+ *
+ * El glosario de `food-terms.ts` es curado y puede equivocarse, así que
+ * quien busca tiene que poder ver si "manzana" se convirtió en "apple" -o en
+ * cualquier otra cosa- antes de fiarse de los resultados. Mostrarlo solo
+ * cuando hay traducción daría a entender que las otras veces se buscó justo
+ * lo escrito, y no siempre es cierto: si el glosario no conoce el término,
+ * también se manda tal cual, y eso también conviene poder verlo.
+ */
+function SearchedAsNote({ original, searchedAs }: { original: string; searchedAs: string }) {
+  const translated = normalizeForSearch(original) !== normalizeForSearch(searchedAs);
+  return (
+    <p className="text-xs text-slate-500">
+      Buscando «{searchedAs}»{translated ? ` (traducido de «${original}»)` : ''}
+    </p>
+  );
 }
 
 function SearchField({

@@ -2,6 +2,7 @@ import { useQuery, type FetchStatus } from '@tanstack/react-query';
 
 import { adoptUsdaSearchResults } from '@/features/food-search/adopt-results';
 import { searchUsdaCatalog, type UsdaSearchPage } from '@/services/usda';
+import { translateSearchTerm } from '@/services/usda/food-terms';
 import { isSearchable } from '@/shared/lib/text';
 import { normalizeForSearch } from '@contracts/text';
 
@@ -59,18 +60,28 @@ export interface UsdaFoodSearchResult {
   readonly state: UsdaSearchViewState;
   readonly retry: () => void;
   readonly isRefreshing: boolean;
+  /**
+   * El término que de verdad ha salido hacia USDA, después de pasar por el
+   * glosario de `food-terms.ts` si lo conocía. Se expone siempre, no solo
+   * cuando hay traducción: mostrar el término real solo a veces daría a
+   * entender que las otras veces se buscó justo lo escrito, y no siempre es
+   * cierto.
+   */
+  readonly searchedAs: string;
 }
 
 export function useUsdaFoodSearch(query: string): UsdaFoodSearchResult {
   const enabled = isSearchable(query);
+  // El glosario traduce ANTES de construir la clave de caché y la URL: si se
+  // tradujera después, "manzana" y "apple" seguirían siendo dos entradas de
+  // caché distintas para el mismo resultado, la misma trampa que D-041
+  // documentó para las variantes de acentuación de OFF.
+  const searchedAs = translateSearchTerm(query);
 
   const result = useQuery({
-    // La clave usa el texto normalizado, por el mismo motivo de caché que
-    // documenta `client.ts`: es la URL con la que la red de distribución de
-    // Vercel guarda la respuesta de `/api/usda/search`.
-    queryKey: ['usda', 'search', normalizeForSearch(query)],
+    queryKey: ['usda', 'search', normalizeForSearch(searchedAs)],
     queryFn: async ({ signal }) =>
-      adoptUsdaSearchResults(await searchUsdaCatalog(query, { signal })),
+      adoptUsdaSearchResults(await searchUsdaCatalog(searchedAs, { signal })),
     enabled,
   });
 
@@ -81,11 +92,12 @@ export function useUsdaFoodSearch(query: string): UsdaFoodSearchResult {
       isError: result.isError,
       error: result.error,
       data: result.data,
-      query,
+      query: searchedAs,
     }),
     retry: () => {
       void result.refetch();
     },
     isRefreshing: result.data !== undefined && result.fetchStatus === 'fetching',
+    searchedAs,
   };
 }

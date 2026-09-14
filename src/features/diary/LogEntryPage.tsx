@@ -9,6 +9,7 @@ import type { FoodId } from '@/domain/identity/ids';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { EntryForm } from '@/features/diary/EntryForm';
 import { useCatalogFood } from '@/features/diary/queries';
+import { displayFoodName } from '@/services/usda/food-terms';
 import { formatLocalDate } from '@/shared/lib/format-date';
 import { formatEnergy } from '@/shared/lib/nutrient-format';
 
@@ -108,7 +109,7 @@ function FoodHeader({ food }: { food: Food }) {
   return (
     <div className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-col">
-        <span className="font-medium text-slate-900">{food.name}</span>
+        <span className="font-medium text-slate-900">{displayFoodName(food)}</span>
         {food.brand === undefined ? null : (
           <span className="text-sm text-slate-500">{food.brand}</span>
         )}

@@ -26,12 +26,35 @@ function Panel({ children }: { children: ReactNode }) {
   );
 }
 
-export function IdleState() {
+/**
+ * Todavía no se ha confirmado ninguna búsqueda en la fuente.
+ *
+ * Deja de ser un cartel pasivo y pasa a ser el sitio desde el que se busca,
+ * porque desde D-041 salir a Open Food Facts es un acto deliberado y esta es la
+ * pantalla donde ese acto tiene que estar a la vista. Quien ya ha tecleado ve un
+ * botón; quien no, ve qué le falta para poder pulsarlo.
+ */
+export function IdleState({ canSubmit, onSubmit }: { canSubmit: boolean; onSubmit: () => void }) {
   return (
     <Panel>
-      <p className="text-slate-600">
-        Escribe al menos {MIN_SEARCH_LENGTH} letras para buscar en Open Food Facts.
-      </p>
+      {canSubmit ? (
+        <>
+          <p className="text-slate-600">
+            Pulsa Intro o el botón para buscar también en Open Food Facts.
+          </p>
+          <button
+            type="button"
+            onClick={onSubmit}
+            className="rounded-md bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-900"
+          >
+            Buscar ahora
+          </button>
+        </>
+      ) : (
+        <p className="text-slate-600">
+          Escribe al menos {MIN_SEARCH_LENGTH} letras para buscar en Open Food Facts.
+        </p>
+      )}
     </Panel>
   );
 }

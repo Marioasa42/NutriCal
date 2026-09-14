@@ -1192,6 +1192,8 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 ## D-041 Buscar mientras se teclea se hace en local; a la fuente se sale con intención
 - **Fecha**: 2026-09-14
 - **Fase**: 1
+- **Estado**: aceptada
+
 - **Estado**: propuesta
 - **Contexto**: el diagnóstico de D-040 destapó una causa anterior. Midiendo el
   par `useDebouncedValue` + `useFoodSearch` con el cliente y el `QueryClient`
@@ -1234,3 +1236,13 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   con esto puesto, no antes, para no ajustar a ojo. Y cuando llegue USDA en la
   fase 2, añadir una segunda fuente deja de multiplicar el problema: teclear no
   genera tráfico, y elegir fuente pasa a ser una decisión de quien busca.
+- **Al implementarlo**: `useDebouncedValue` se queda sin ningún uso y se borra,
+  en lugar de guardarlo por si acaso, que es lo que CLAUDE.md pide evitar; el
+  historial de git lo conserva. La pantalla gana un test de componente, el único
+  de la suite, y se justifica solo: lo que comprueba es que teclear produce cero
+  peticiones, y esa garantía no vive en ninguna función pura que se pudiera
+  probar aparte. Aparecieron de paso dos cosas que no se buscaban: que había dos
+  botones llamados Buscar en la misma pantalla, indistinguibles para un lector
+  de pantalla, y que la consulta confirmada puede vivir en la URL en lugar de en
+  un `useState`, lo que elimina el `useEffect` que sincronizaba las dos.
+

@@ -6,6 +6,7 @@ import {
   type ProductPayload,
   type SearchPayload,
 } from '@/services/off/schemas';
+import { normalizeForSearch } from '@contracts/text';
 
 /**
  * El único punto del navegador que habla por red con nuestra API.
@@ -225,7 +226,14 @@ export async function searchProducts(
   query: string,
   options: RequestOptions & { page?: number } = {},
 ): Promise<SearchPayload> {
-  const params = new URLSearchParams({ q: query });
+  // El texto sale normalizado, no crudo, y esto no es cosmética: la URL ES la
+  // clave con la que la red de distribución de Vercel guarda la respuesta.
+  // Mandando el texto tal cual, "Plátano", "platano" y "  PLÁTANO  " producían
+  // tres entradas de caché distintas para el mismo término y tres fallos de
+  // caché, mientras el comentario de `contracts/text.ts` afirmaba lo contrario
+  // (D-041). La función serverless ya normalizaba por dentro, pero eso llega
+  // tarde: la caché y el cubo de fichas quedan por delante de ella.
+  const params = new URLSearchParams({ q: normalizeForSearch(query) });
   if (options.page !== undefined) {
     params.set('page', String(options.page));
   }

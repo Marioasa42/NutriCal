@@ -6,18 +6,26 @@ import { isSearchable } from '@/shared/lib/text';
 import { normalizeForSearch } from '@contracts/text';
 
 /**
- * La búsqueda de alimentos, con sus estados.
+ * La búsqueda en Open Food Facts, con sus estados.
  *
- * Lo único que hace falta cancelar a mano es nada: TanStack Query pasa un
- * `AbortSignal` a la función de consulta y aborta la petición en vuelo cuando la
- * consulta se queda sin observadores, que es exactamente lo que pasa al cambiar
- * la clave de caché porque el texto ha cambiado. El cliente ya acepta ese
- * `signal` desde el paso 2b y deja subir el `AbortError` sin envolverlo, para que
- * cancelar no se confunda con fallar.
+ * Recibe una consulta **ya confirmada**, no lo que se está tecleando. Ese es el
+ * cambio que trae D-041 y conviene entender por qué, porque desde aquí no se ve:
+ * antes este hook recibía el texto pasado por un debounce de 400 ms, y medido,
+ * teclear "leche entera" producía una petición si se tecleaba rápido y **nueve**
+ * si se hacían pausas de más de 400 ms entre teclas. Cada prefijo (`lec`,
+ * `lech`, `leche`…) es una clave de caché distinta en los tres sitios a la vez,
+ * así que ninguna caché podía ayudar: no había nada repetido que cachear.
+ *
+ * El debounce no estaba roto —cancelaba correctamente—, era insuficiente por
+ * construcción: cuando las pausas superan su umbral no hay nada que cancelar,
+ * porque cada petición termina antes de que empiece la siguiente. Y Open Food
+ * Facts avisa explícitamente en sus condiciones de que no se use su búsqueda
+ * mientras se teclea, cosa que ya estaba anotada en el contexto de D-013.
+ *
+ * Así que quien teclea ve su catálogo local (`useLocalFoodSearch`) y aquí solo
+ * se llega pulsando Intro o el botón. Sigue habiendo cancelación por
+ * `AbortSignal`, que ahora cubre el caso de confirmar dos búsquedas seguidas.
  */
-
-/** Cuánto se espera desde la última tecla antes de salir a la red. */
-export const SEARCH_DEBOUNCE_MS = 400;
 
 /**
  * Los estados que la pantalla sabe dibujar, como unión discriminada.
@@ -87,6 +95,9 @@ export function useFoodSearch(query: string): FoodSearchResult {
     // La clave usa el texto normalizado, no el que se tecleó. Así "Plátano" y
     // "platano" comparten entrada de caché, que es la misma clave con la que la
     // función serverless guarda su respuesta: las dos cachés aciertan a la vez.
+    // Hasta D-041 eso era mentira a medias, porque la normalización se aplicaba
+    // solo aquí y la URL saliente llevaba el texto crudo; ahora `searchProducts`
+    // normaliza también, que es donde de verdad cuenta.
     queryKey: ['off', 'search', normalizeForSearch(query)],
     // Los resultados pasan por el catálogo local antes de llegar a la pantalla.
     // Es D-013 aplicado ("todo alimento consultado se guarda en Dexie") y lo que

@@ -8,6 +8,7 @@ import type { LocalDate } from '@/domain/time/local-date';
 import { DayTotalsPanel } from '@/features/diary/DayTotalsPanel';
 import { useMealsOn, useRemoveMeal, useRestoreMeal } from '@/features/diary/queries';
 import { MicronutrientPanel } from '@/features/nutrition/MicronutrientPanel';
+import { displayFoodName } from '@/services/usda/food-terms';
 import { MEAL_SLOT_LABELS } from '@/shared/lib/meal-labels';
 import { formatEnergy, formatQuantity } from '@/shared/lib/nutrient-format';
 
@@ -180,7 +181,7 @@ function DeletedRow({
       className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4"
     >
       <span className="min-w-0 truncate text-slate-500">
-        <span className="line-through">{entry.food.name}</span> · borrado
+        <span className="line-through">{displayFoodName(entry.food)}</span> · borrado
       </span>
       <button
         type="button"
@@ -224,7 +225,7 @@ function EntryRow({
   return (
     <li className="flex items-start justify-between gap-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex min-w-0 flex-col">
-        <span className="truncate font-medium text-slate-900">{entry.food.name}</span>
+        <span className="truncate font-medium text-slate-900">{displayFoodName(entry.food)}</span>
         {entry.food.brand === undefined ? null : (
           <span className="truncate text-sm text-slate-500">{entry.food.brand}</span>
         )}

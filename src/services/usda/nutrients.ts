@@ -96,7 +96,10 @@ function makeAmountFinder<TNutrient>(
   numberOf: (nutrient: TNutrient) => string | number | null | undefined,
   amountOf: (nutrient: TNutrient) => number | null | undefined,
 ) {
-  return (nutrients: readonly TNutrient[] | null | undefined, fdcNumber: string): number | undefined => {
+  return (
+    nutrients: readonly TNutrient[] | null | undefined,
+    fdcNumber: string,
+  ): number | undefined => {
     if (nutrients === null || nutrients === undefined) {
       return undefined;
     }

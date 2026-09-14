@@ -47,8 +47,7 @@ export { defaultNormalizationContext, type NormalizationContext };
  */
 
 export type UsdaNormalization =
-  | NormalizationResult
-  | { readonly kind: 'unreadable'; readonly reason: string };
+  NormalizationResult | { readonly kind: 'unreadable'; readonly reason: string };
 
 interface UsdaIdentityFields {
   readonly fdcId: number;

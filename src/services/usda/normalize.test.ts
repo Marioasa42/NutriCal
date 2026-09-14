@@ -51,7 +51,12 @@ const LENTEJAS_BUSQUEDA = {
   foodNutrients: [
     { nutrientNumber: '203', nutrientName: 'Protein', unitName: 'G', value: 24.63 },
     { nutrientNumber: '204', nutrientName: 'Total lipid (fat)', unitName: 'G', value: 1.06 },
-    { nutrientNumber: '205', nutrientName: 'Carbohydrate, by difference', unitName: 'G', value: 63.35 },
+    {
+      nutrientNumber: '205',
+      nutrientName: 'Carbohydrate, by difference',
+      unitName: 'G',
+      value: 63.35,
+    },
     { nutrientNumber: '208', nutrientName: 'Energy', unitName: 'KCAL', value: 353 },
     { nutrientNumber: '269', nutrientName: 'Total Sugars', unitName: 'G', value: 2.03 },
     { nutrientNumber: '291', nutrientName: 'Fiber, total dietary', unitName: 'G', value: 10.7 },

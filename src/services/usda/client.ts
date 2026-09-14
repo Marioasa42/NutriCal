@@ -107,11 +107,7 @@ async function errorFromResponse(response: Response): Promise<UsdaApiError> {
   }
 
   const code: UsdaErrorCode = response.status === 429 ? 'rate_limited' : 'upstream_error';
-  return new UsdaApiError(
-    code,
-    `La API ha respondido con el estado ${response.status}.`,
-    shared,
-  );
+  return new UsdaApiError(code, `La API ha respondido con el estado ${response.status}.`, shared);
 }
 
 async function getJson(path: string, options: RequestOptions): Promise<unknown> {

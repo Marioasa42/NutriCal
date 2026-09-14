@@ -1,8 +1,6 @@
 import type { FoodDraft, NormalizationResult } from '@/domain/food/draft';
 import type { BaseUnit, Food, ServingOption } from '@/domain/food/food';
-import { newFoodId, newServingId, type FoodId, type ServingId } from '@/domain/identity/ids';
 import type { Macros, RequiredMacroKey } from '@/domain/nutrition/macros';
-import { now, type Instant } from '@/domain/time/local-date';
 import { grams, milliliters, type Grams, type Milliliters } from '@/domain/units/units';
 import {
   gramsOf,
@@ -11,6 +9,12 @@ import {
   readNutrient,
 } from '@/services/off/nutriments';
 import { offProductSchema, type OffProduct } from '@/services/off/schemas';
+import {
+  defaultNormalizationContext,
+  type NormalizationContext,
+} from '@/services/shared/normalization-context';
+
+export { defaultNormalizationContext, type NormalizationContext };
 
 /**
  * Conversión de un producto de Open Food Facts a una entidad del dominio.
@@ -34,26 +38,6 @@ import { offProductSchema, type OffProduct } from '@/services/off/schemas';
  */
 export type ProductNormalization =
   NormalizationResult | { readonly kind: 'unreadable'; readonly reason: string };
-
-/**
- * Las dependencias impuras, por parámetro.
- *
- * Sin esto la función leería el reloj y generaría identificadores por dentro, y
- * entonces dos llamadas con la misma entrada darían objetos distintos: ningún
- * test podría comparar el resultado completo. Con el contexto inyectado la
- * normalización vuelve a ser una función pura de sus argumentos.
- */
-export interface NormalizationContext {
-  readonly now: () => Instant;
-  readonly newFoodId: () => FoodId;
-  readonly newServingId: () => ServingId;
-}
-
-export const defaultNormalizationContext: NormalizationContext = {
-  now,
-  newFoodId,
-  newServingId,
-};
 
 /** Clave del diccionario de nutrientes que corresponde a cada macro opcional. */
 const OPTIONAL_MACRO_KEYS = {

@@ -3,8 +3,12 @@ import type { Food } from '@/domain/food/food';
 import type { FoodId } from '@/domain/identity/ids';
 import type { LocalDate } from '@/domain/time/local-date';
 import { DraftCard, FoodCard } from '@/features/food-search/FoodResultCard';
-import { AddToDiaryLink, CompleteDraftLink } from '@/features/food-search/ResultActions';
+import { CompleteDraftLink, FoodAction } from '@/features/food-search/ResultActions';
 import type { FoodSearchPage } from '@/services/off';
+import type { UsdaSearchPage } from '@/services/usda';
+
+/** Los micronutrientes de USDA solo llegan al completar (D-048): se avisa en la propia tarjeta. */
+const USDA_MICROS_NOTE = 'Los micronutrientes se completan al añadir esta comida al diario.';
 
 /**
  * Lo que ya tienes en el catálogo, mientras tecleas (D-041).
@@ -41,15 +45,43 @@ export function CatalogResults({
       ) : (
         <ul className="flex flex-col gap-3">
           {foods.map((food) => (
-            <FoodCard
-              key={food.id}
-              food={food}
-              action={<AddToDiaryLink date={date} food={food} />}
-            />
+            <ResultCard key={food.id} date={date} food={food} />
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * Un alimento de USDA sin micronutrientes todavía es el caso normal, no un
+ * fallo: solo la ficha detallada los trae (D-048). Se avisa en la propia
+ * tarjeta, coherente con D-029: un borrador incompleto explica qué le falta
+ * en el propio resultado, en vez de dejar que parezca un fallo de la
+ * aplicación. Una vez completado (al añadirlo una primera vez), el alimento
+ * guardado ya trae micronutrientes y el aviso deja de mostrarse solo.
+ */
+function usdaMicrosNote(food: Food): string | undefined {
+  return food.source.kind === 'usda' && Object.keys(food.per100.micros).length === 0
+    ? USDA_MICROS_NOTE
+    : undefined;
+}
+
+/**
+ * Una tarjeta de resultado con su acción y su aviso, si le toca uno.
+ *
+ * Las tres listas de esta pantalla (el catálogo, los resultados de OFF y los
+ * de USDA) pueden mezclar alimentos de cualquier fuente y necesitan
+ * exactamente esto mismo, así que vive en un solo sitio en vez de en tres.
+ */
+function ResultCard({ date, food }: { date: LocalDate; food: Food }) {
+  const note = usdaMicrosNote(food);
+  return (
+    <FoodCard
+      food={food}
+      action={<FoodAction date={date} food={food} />}
+      {...(note !== undefined ? { note } : {})}
+    />
   );
 }
 
@@ -87,7 +119,48 @@ export function SearchResults({
 
       <ul className="flex flex-col gap-3">
         {fresh.map((food) => (
-          <FoodCard key={food.id} food={food} action={<AddToDiaryLink date={date} food={food} />} />
+          <ResultCard key={food.id} date={date} food={food} />
+        ))}
+        {page.drafts.map((draft) => (
+          <DraftCard
+            key={draftKey(draft)}
+            draft={draft}
+            action={<CompleteDraftLink date={date} draft={draft} />}
+          />
+        ))}
+      </ul>
+
+      {alreadyKnown > 0 ? <AlreadyKnownNote count={alreadyKnown} /> : null}
+      {page.unreadable > 0 ? <UnreadableNote count={page.unreadable} /> : null}
+    </div>
+  );
+}
+
+/**
+ * La lista de resultados de USDA FoodData Central.
+ *
+ * Calcada de `SearchResults`, con una diferencia real: `UsdaSearchPage` no
+ * trae un "total" de resultados (la API de búsqueda de FDC no lo da con el
+ * mismo significado que el `count` de OFF), así que no hay una cifra de "X de
+ * Y" que mostrar, solo cuántos se enseñan.
+ */
+export function UsdaSearchResults({
+  page,
+  date,
+  knownIds,
+}: {
+  page: UsdaSearchPage;
+  date: LocalDate;
+  knownIds?: ReadonlySet<FoodId>;
+}) {
+  const fresh = knownIds === undefined ? page.foods : page.foods.filter((f) => !knownIds.has(f.id));
+  const alreadyKnown = page.foods.length - fresh.length;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-3">
+        {fresh.map((food) => (
+          <ResultCard key={food.id} date={date} food={food} />
         ))}
         {page.drafts.map((draft) => (
           <DraftCard

@@ -1,6 +1,7 @@
 import { QueryClient } from '@tanstack/react-query';
 
 import { OffApiError, type OffErrorCode } from '@/services/off/client';
+import { UsdaApiError, type UsdaErrorCode } from '@/services/usda/client';
 
 /**
  * La configuración de TanStack Query, con su política de reintentos.
@@ -56,6 +57,43 @@ export function shouldRetryOffQuery(failureCount: number, error: unknown): boole
   return error instanceof OffApiError && RETRYABLE_CODES.includes(error.code);
 }
 
+/**
+ * Los mismos códigos, para USDA FoodData Central.
+ *
+ * `UsdaErrorCode` no es el mismo tipo que `OffErrorCode` aunque comparta todos
+ * sus valores (ver la explicación larga en `usda/client.ts`), así que hace
+ * falta su propia lista y no basta con reutilizar `RETRYABLE_CODES`: son dos
+ * tipos que TypeScript no considera iguales, aunque los valores literales
+ * coincidan hoy.
+ */
+const RETRYABLE_USDA_CODES: readonly UsdaErrorCode[] = [
+  'network',
+  'upstream_error',
+  'upstream_timeout',
+];
+
+export function shouldRetryUsdaQuery(failureCount: number, error: unknown): boolean {
+  if (failureCount >= MAX_RETRIES) {
+    return false;
+  }
+  return error instanceof UsdaApiError && RETRYABLE_USDA_CODES.includes(error.code);
+}
+
+/**
+ * La política de reintentos que de verdad usa el `QueryClient`.
+ *
+ * Antes de que existiera USDA, `shouldRetryOffQuery` era también, sin decirlo,
+ * la política de TODA la aplicación: las consultas locales de Dexie nunca
+ * lanzan un `OffApiError`, así que para ellas siempre daba `false`, que es lo
+ * correcto por casualidad. Con una segunda fuente de red hacía falta decirlo
+ * en voz alta: un `UsdaApiError` no es un `OffApiError`, y sin este despachador
+ * cualquier fallo de red de USDA se habría quedado, también por casualidad,
+ * sin ningún reintento.
+ */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  return shouldRetryOffQuery(failureCount, error) || shouldRetryUsdaQuery(failureCount, error);
+}
+
 /** Cinco minutos: la ficha de un producto no cambia mientras se teclea. */
 const STALE_TIME_MS = 5 * 60 * 1000;
 
@@ -68,7 +106,7 @@ export function createQueryClient(): QueryClient {
       queries: {
         staleTime: STALE_TIME_MS,
         gcTime: GC_TIME_MS,
-        retry: shouldRetryOffQuery,
+        retry: shouldRetryQuery,
 
         // Apagados los dos porque son los que más peticiones invisibles gastan.
         // Volver a la pestaña o recuperar la conexión no es motivo para repetir

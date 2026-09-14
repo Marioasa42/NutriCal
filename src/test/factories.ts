@@ -36,6 +36,7 @@ export function makeFood(
     name?: string;
     brand?: string;
     barcode?: string;
+    fdcId?: number;
     energyKcal?: number;
     proteinG?: number;
     createdAt?: Instant;
@@ -47,6 +48,7 @@ export function makeFood(
     name = 'Manzana',
     brand,
     barcode,
+    fdcId,
     energyKcal = 52,
     proteinG = 0.3,
     createdAt = DEFAULT_INSTANT,
@@ -60,7 +62,9 @@ export function makeFood(
     source:
       barcode !== undefined
         ? { kind: 'openFoodFacts', barcode, fetchedAt: createdAt }
-        : { kind: 'custom' },
+        : fdcId !== undefined
+          ? { kind: 'usda', fdcId, fetchedAt: createdAt }
+          : { kind: 'custom' },
     baseUnit: 'g',
     per100: {
       macros: {

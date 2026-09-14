@@ -1605,3 +1605,77 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   (la macro opcional de OFF) tampoco se deriva del sodio de FDC por el mismo
   motivo: convertir sodio en sal exige un factor (~2,5) que nadie ha medido
   para ese alimento concreto.
+
+---
+
+## D-049 USDA entra en la pantalla de búsqueda: cierra D-048
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: D-048 dejó pendiente, a propósito y por escrito, en qué paso
+  entraría el cableado de USDA en la pantalla de búsqueda. Con el cliente
+  completo y sin usarse desde ninguna pantalla, la fase 2 no cumplía su
+  propio motivo de existir: buscar "espinacas" o "manzana" seguía sin
+  encontrar nada, porque Open Food Facts cubre bien lo envasado y trae poco
+  de lo fresco, que es justo lo que USDA FoodData Central tiene en
+  abundancia (su base SR Legacy es sobre todo alimentos crudos y básicos).
+- **Decisión**: la misma búsqueda confirmada sale a la vez a las dos fuentes,
+  en dos secciones separadas de `SearchPage` ("En Open Food Facts" / "En USDA
+  FoodData Central"), cada una con su propio hook (`useUsdaFoodSearch`,
+  calcado de `useFoodSearch`), sus propios estados (`UsdaSearchStates.tsx`) y
+  sus propios mensajes de error (`usda-error-messages.ts`). "En tu catálogo"
+  no se duplica: ya era agnóstica de fuente y ahora enseña alimentos de las
+  dos indistintamente.
+
+  Cada tarjeta de un resultado de USDA lleva un aviso ("los micronutrientes
+  se completan al añadir esta comida al diario"), coherente con D-029: un
+  resultado incompleto explica qué le falta en el propio resultado en vez de
+  parecer un fallo. Y "añadir al diario" para uno de USDA
+  (`AddUsdaFoodLink`) no es el enlace inmediato de OFF: primero llama a
+  `fetchUsdaFoodProfile`, guarda el perfil completo en el alimento ya
+  adoptado (`mergeUsdaDetailIntoCatalogFood`, que conserva la identidad del
+  catálogo y toma el perfil nutricional de la ficha) y solo entonces navega a
+  registrar. Si el alimento ya se completó antes (una visita anterior, o
+  desde "en tu catálogo"), no vuelve a pedir la ficha: `Object.keys(...).length
+  > 0` en sus micronutrientes ya dice que no hace falta.
+
+  Tres arreglos de fondo, encontrados al construir esto y no al buscarlos:
+  1. `foodRepository.adopt()` no deduplicaba por `fdcId` como sí hacía por
+     código de barras: cada búsqueda de un mismo alimento de USDA habría
+     creado una fila nueva del catálogo. Arreglado con el mismo trato que
+     el código de barras, y un índice nuevo (`[isDeleted+source.fdcId]`,
+     versión 2 del esquema de Dexie, D-015).
+  2. La política de reintentos del `QueryClient` (`shouldRetryOffQuery`,
+     D-040) era sin saberlo la política de TODA la aplicación, porque
+     ninguna consulta local lanza un `OffApiError` y por eso siempre daba
+     `false` para ellas, por casualidad. Con USDA de por medio, un
+     `UsdaApiError` tampoco es un `OffApiError`, así que sus fallos de red se
+     habrían quedado sin ningún reintento, también por casualidad y no por
+     decisión. Ahora `shouldRetryQuery` despacha a la lista de cada fuente.
+  3. `dbKeys.food` (la clave de caché de un alimento por identificador) vivía
+     en `features/diary/queries.ts`, pero desde que completar un alimento de
+     USDA necesita invalidarla también desde `features/food-search/`, y
+     D-027 prohíbe que una funcionalidad importe de la otra, se mudó a
+     `foodKeys` en `data/repositories/foods.ts`, que las dos ya importaban.
+- **Por qué**: mostrar las dos fuentes a la vez, en vez de una detrás de otra
+  o tras un interruptor, es lo que de verdad resuelve el problema que
+  motivó todo esto: encontrar alimentos frescos sin tener que saber de
+  antemano en qué base de datos están. El aviso en la tarjeta y el
+  completar-antes-de-navegar son la aplicación directa de D-048: la
+  instantánea de D-003 nunca puede salir de un resultado de búsqueda a
+  medias.
+- **Alternativa descartada**: (a) pedir la ficha completa de cada resultado
+  de USDA en cuanto aparece en pantalla, en vez de al añadir, que es la
+  opción que D-048 ya descartó por multiplicar las peticiones exactamente
+  por el número de resultados visibles (el error de fondo de D-041, aplicado
+  a otra fuente); (b) un selector para elegir "buscar en OFF" o "buscar en
+  USDA" antes de escribir, que traslada a quien busca una decisión que la
+  aplicación puede tomar por su cuenta sin coste real, dado que las dos
+  búsquedas ya salían gratis en paralelo.
+- **Consecuencias**: esto no añade ninguna forma de editar
+  `DailyGoals.micros` desde la interfaz, así que `targetSource` del panel de
+  micronutrientes (D-050, en otra rama todavía sin fusionar) sigue valiendo
+  `'reference'` siempre en la práctica. Lo que sí cambia es que ahora los
+  alimentos de USDA registrados en el diario aportan de verdad micronutrientes
+  al total del día, que es lo que ese panel necesitaba para tener algo que
+  enseñar más allá de lo que ya trajera Open Food Facts.

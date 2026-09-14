@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldRetryOffQuery } from '@/app/query-client';
+import { shouldRetryOffQuery, shouldRetryQuery, shouldRetryUsdaQuery } from '@/app/query-client';
 import { OffApiError } from '@/services/off/client';
+import { UsdaApiError } from '@/services/usda/client';
 
 const error = (code: ConstructorParameters<typeof OffApiError>[0]) => new OffApiError(code, 'x');
+const usdaError = (code: ConstructorParameters<typeof UsdaApiError>[0]) =>
+  new UsdaApiError(code, 'x');
 
 describe('shouldRetryOffQuery', () => {
   it('reintenta lo que puede arreglarse solo', () => {
@@ -41,5 +44,45 @@ describe('shouldRetryOffQuery', () => {
     // y repetirlo solo repetiría el fallo.
     expect(shouldRetryOffQuery(0, new TypeError('undefined is not a function'))).toBe(false);
     expect(shouldRetryOffQuery(0, 'algo')).toBe(false);
+  });
+
+  it('no reintenta un error de USDA: son tipos distintos aunque compartan el nombre del código', () => {
+    expect(shouldRetryOffQuery(0, usdaError('network'))).toBe(false);
+  });
+});
+
+describe('shouldRetryUsdaQuery', () => {
+  it('reintenta lo mismo que OFF, pero solo para sus propios errores', () => {
+    expect(shouldRetryUsdaQuery(0, usdaError('network'))).toBe(true);
+    expect(shouldRetryUsdaQuery(0, usdaError('upstream_error'))).toBe(true);
+    expect(shouldRetryUsdaQuery(0, usdaError('upstream_timeout'))).toBe(true);
+  });
+
+  it('nunca reintenta un límite de ritmo, sea nuestro o de la fuente', () => {
+    expect(shouldRetryUsdaQuery(0, usdaError('rate_limited'))).toBe(false);
+    expect(shouldRetryUsdaQuery(0, usdaError('upstream_rate_limited'))).toBe(false);
+  });
+
+  it('un error de OFF no cuenta como un error de USDA', () => {
+    expect(shouldRetryUsdaQuery(0, error('network'))).toBe(false);
+  });
+
+  it('se rinde a un solo reintento', () => {
+    expect(shouldRetryUsdaQuery(0, usdaError('network'))).toBe(true);
+    expect(shouldRetryUsdaQuery(1, usdaError('network'))).toBe(false);
+  });
+});
+
+describe('shouldRetryQuery', () => {
+  it('es la política real del QueryClient: reintenta lo de las dos fuentes', () => {
+    expect(shouldRetryQuery(0, error('network'))).toBe(true);
+    expect(shouldRetryQuery(0, usdaError('network'))).toBe(true);
+  });
+
+  it('no reintenta lo que no sea un error de ninguna de las dos fuentes', () => {
+    // Antes de que existiera USDA, esto pasaba por casualidad: una consulta
+    // local de Dexie nunca lanza un OffApiError, así que siempre daba `false`.
+    // Con dos fuentes hacía falta comprobarlo a propósito.
+    expect(shouldRetryQuery(0, new TypeError('undefined is not a function'))).toBe(false);
   });
 });

@@ -4,7 +4,11 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { InvalidDate } from '@/app/routes/InvalidDate';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { BarcodeField } from '@/features/food-search/BarcodeField';
-import { CatalogResults, SearchResults } from '@/features/food-search/SearchResults';
+import {
+  CatalogResults,
+  SearchResults,
+  UsdaSearchResults,
+} from '@/features/food-search/SearchResults';
 import {
   EmptyState,
   ErrorState,
@@ -12,8 +16,16 @@ import {
   LoadingState,
   OfflineState,
 } from '@/features/food-search/SearchStates';
+import {
+  UsdaEmptyState,
+  UsdaErrorState,
+  UsdaIdleState,
+  UsdaLoadingState,
+  UsdaOfflineState,
+} from '@/features/food-search/UsdaSearchStates';
 import { useFoodSearch } from '@/features/food-search/useFoodSearch';
 import { useLocalFoodSearch } from '@/features/food-search/useLocalFoodSearch';
+import { useUsdaFoodSearch } from '@/features/food-search/useUsdaFoodSearch';
 import { formatLocalDate } from '@/shared/lib/format-date';
 import { isSearchable } from '@/shared/lib/text';
 import { normalizeForSearch } from '@contracts/text';
@@ -30,7 +42,7 @@ import { normalizeForSearch } from '@contracts/text';
  * ## Dos búsquedas, no una (D-041)
  *
  * Mientras tecleas se busca **en tu catálogo local**, que es instantáneo, no
- * gasta red y funciona sin conexión. A **Open Food Facts** se sale solo al
+ * gasta red y funciona sin conexión. A las fuentes externas se sale solo al
  * pulsar Intro o el botón.
  *
  * El motivo está medido: con la versión anterior, que salía a la red por cada
@@ -38,6 +50,16 @@ import { normalizeForSearch } from '@contracts/text';
  * normales producía nueve peticiones, una por prefijo. Y sus condiciones de uso
  * avisan de que no se use su búsqueda mientras se teclea. Lo que cuesta se pide
  * con intención; lo que no cuesta se enseña al instante.
+ *
+ * ## Dos fuentes externas, no una (D-048)
+ *
+ * La misma búsqueda confirmada sale a la vez a Open Food Facts y a USDA
+ * FoodData Central, en dos secciones separadas: Open Food Facts cubre bien lo
+ * envasado y trae poco de lo fresco (frutas, verduras, legumbres crudas), y
+ * USDA es justo al revés. Un resultado de USDA nace sin micronutrientes -solo
+ * la ficha detallada los trae- y su tarjeta lo dice; "añadir al diario" para
+ * uno de USDA completa esa ficha antes de navegar, en vez de navegar sin más
+ * (ver `AddUsdaFoodLink` en `ResultActions.tsx`).
  */
 export function SearchPage() {
   const { date: rawDate = '' } = useParams<{ date: string }>();
@@ -67,6 +89,7 @@ function Search({ date }: { date: LocalDate }) {
 
   const local = useLocalFoodSearch(text);
   const { state, retry, isRefreshing } = useFoodSearch(submitted);
+  const usda = useUsdaFoodSearch(submitted);
 
   const canSubmit = isSearchable(text);
 
@@ -113,7 +136,7 @@ function Search({ date }: { date: LocalDate }) {
         onChange={setText}
         onSubmit={submit}
         canSubmit={canSubmit}
-        busy={isRefreshing}
+        busy={isRefreshing || usda.isRefreshing}
       />
 
       <CatalogResults foods={local.foods} searched={local.searched} date={date} />
@@ -123,6 +146,13 @@ function Search({ date }: { date: LocalDate }) {
           En Open Food Facts
         </h2>
         {renderRemote()}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+          En USDA FoodData Central
+        </h2>
+        {renderUsda()}
       </section>
 
       <BarcodeField date={date} />
@@ -146,6 +176,23 @@ function Search({ date }: { date: LocalDate }) {
         return <EmptyState query={state.query} />;
       case 'results':
         return <SearchResults page={state.page} date={date} knownIds={knownIds} />;
+    }
+  }
+
+  function renderUsda() {
+    switch (usda.state.kind) {
+      case 'idle':
+        return <UsdaIdleState canSubmit={canSubmit} onSubmit={submit} />;
+      case 'loading':
+        return <UsdaLoadingState />;
+      case 'offline':
+        return <UsdaOfflineState />;
+      case 'error':
+        return <UsdaErrorState error={usda.state.error} onRetry={usda.retry} />;
+      case 'empty':
+        return <UsdaEmptyState query={usda.state.query} />;
+      case 'results':
+        return <UsdaSearchResults page={usda.state.page} date={date} knownIds={knownIds} />;
     }
   }
 }
@@ -201,15 +248,13 @@ function SearchField({
           // código de barras, que también dice "Buscar". Dos controles con el
           // mismo nombre en la misma pantalla dejan a quien navega por voz o con
           // lector de pantalla sin forma de decir cuál quiere.
-          aria-label="Buscar en Open Food Facts"
+          aria-label="Buscar en Open Food Facts y en USDA FoodData Central"
           className="shrink-0 rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:bg-slate-300"
         >
           Buscar
         </button>
       </div>
-      <span className="h-4 text-xs text-slate-500">
-        {busy ? 'Buscando en Open Food Facts…' : null}
-      </span>
+      <span className="h-4 text-xs text-slate-500">{busy ? 'Buscando…' : null}</span>
     </form>
   );
 }

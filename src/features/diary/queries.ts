@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { diaryRepository } from '@/data/repositories/diary';
-import { foodRepository } from '@/data/repositories/foods';
+import { foodKeys, foodRepository } from '@/data/repositories/foods';
 import { seeder } from '@/data/seed';
 import type { MealEntry } from '@/domain/diary/meal-entry';
 import type { Food } from '@/domain/food/food';
@@ -25,7 +25,6 @@ import type { LocalDate } from '@/domain/time/local-date';
  * `off`, que son las que sí salen a la red.
  */
 export const dbKeys = {
-  food: (id: FoodId) => ['db', 'food', id] as const,
   meal: (id: MealEntryId) => ['db', 'meal', id] as const,
   mealsOn: (date: LocalDate) => ['db', 'meals', date] as const,
   example: ['db', 'example'] as const,
@@ -61,7 +60,7 @@ export type CatalogFoodState =
  */
 export function useCatalogFood(foodId: FoodId): CatalogFoodState {
   const { data, isPending, isError, error } = useQuery({
-    queryKey: dbKeys.food(foodId),
+    queryKey: foodKeys.byId(foodId),
     queryFn: () => foodRepository.byId(foodId),
     ...LOCAL,
   });

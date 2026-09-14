@@ -7,6 +7,7 @@ import type { MealEntryId } from '@/domain/identity/ids';
 import type { LocalDate } from '@/domain/time/local-date';
 import { DayTotalsPanel } from '@/features/diary/DayTotalsPanel';
 import { useMealsOn, useRemoveMeal, useRestoreMeal } from '@/features/diary/queries';
+import { MicronutrientPanel } from '@/features/nutrition/MicronutrientPanel';
 import { MEAL_SLOT_LABELS } from '@/shared/lib/meal-labels';
 import { formatEnergy, formatQuantity } from '@/shared/lib/nutrient-format';
 
@@ -78,6 +79,8 @@ export function DayDiary({ date }: { date: LocalDate }) {
   return (
     <div className="flex flex-col gap-6">
       <DayTotalsPanel totals={totals} entryCount={meals.length} />
+
+      <MicronutrientPanel date={date} totals={totals} entryCount={meals.length} />
 
       {MEAL_SLOTS.map((slot) => {
         const inSlot = meals.filter((entry) => entry.slot === slot);

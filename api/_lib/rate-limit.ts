@@ -76,3 +76,17 @@ export function createTokenBucket(options: {
  */
 export const searchBucket = createTokenBucket({ capacity: 6, refillPerMinute: 6 });
 export const productBucket = createTokenBucket({ capacity: 30, refillPerMinute: 60 });
+
+/*
+ * USDA FoodData Central documenta un límite compartido de 1000 peticiones por
+ * hora y por dirección IP, para los dos endpoints juntos (no reparte el cupo
+ * entre buscar y consultar un alimento, como sí hace OFF). Por eso aquí hay un
+ * único cubo para las dos funciones, y no dos como en OFF.
+ *
+ * 15 por minuto son 900 por hora: por debajo del límite documentado, con el
+ * mismo margen de seguridad que ya aplicaba D-013 al quedarse corto respecto a
+ * lo que OFF permite. En Vercel la IP se comparte, así que pasarse no nos
+ * bloquearía solo a nosotros, y aquí además hay una clave de verdad que
+ * proteger, no solo cortesía con un tercero.
+ */
+export const usdaBucket = createTokenBucket({ capacity: 15, refillPerMinute: 15 });

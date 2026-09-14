@@ -1470,3 +1470,53 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   la llamara sin ese argumento se rompe (hoy no la llama nadie fuera de sus
   propios tests). Si en el futuro se calcula el EER completo con los datos
   corporales, esta decisión se revisa y se sustituye.
+
+## D-047 USDA FoodData Central se consulta a través de una función serverless propia, con la clave solo en el servidor
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: D-013 puso Open Food Facts detrás de una función serverless
+  propia y ya avisó de que la misma capa haría falta para USDA: *"es la misma
+  capa que la fase 2 necesitará para esconder la clave de USDA, así que
+  montarla ahora no es trabajo adelantado, es no montarla dos veces"*. Con la
+  fase 2 en marcha, tocaba escribirla. La diferencia con OFF es que aquí sí hay
+  un secreto de verdad: la clave de `api.data.gov` que da acceso a FDC, con un
+  cupo (1000 peticiones por hora y por IP) que se agotaría para todo el mundo
+  si se filtrara, y no una simple cabecera de cortesía como el `User-Agent` de
+  OFF.
+- **Decisión**: dos funciones serverless nuevas, `/api/usda/search` y
+  `/api/usda/food/[fdcId]`, calcadas del patrón de `api/off/`: adaptadores de
+  tres líneas, con toda la lógica en `api/_lib/usda.ts` (construcción de URL,
+  validación, llamada con tiempo máximo) y `api/_lib/usda-handlers.ts`
+  (los dos manejadores, con sus dependencias por parámetro). Reutilizan el
+  vocabulario de `http.ts` (`ErrorCode`, cabeceras de caché) y el patrón de
+  `rate-limit.ts`, con un cubo propio (`usdaBucket`, 15/min, ~900/hora, por
+  debajo del límite documentado). La clave se lee de `process.env.USDA_API_KEY`
+  dentro de la función, nunca llega al navegador, y si falta se devuelve un
+  `500` controlado sin mencionar el nombre de la variable en la respuesta.
+  `.env.example` documenta el nombre de la variable, sin ningún valor.
+- **Por qué**: es la razón de D-013 (nunca hablar con una fuente externa desde
+  el navegador) más el motivo nuevo que esa decisión ya anticipaba. Que las dos
+  fuentes compartan `http.ts` y el patrón de `rate-limit.ts` no es
+  casualidad: el trato con el navegador es el mismo trato sea cual sea la
+  fuente de detrás, y duplicar ese vocabulario para USDA habría significado
+  mantener dos copias de la misma regla (D-040 aplicada dos veces por
+  separado). Que vivan en un archivo `usda-handlers.ts` distinto de
+  `handlers.ts`, y no mezcladas, es al revés: son dos fuentes externas con su
+  propio formato de campos por debajo, y cambian por motivos distintos.
+- **Alternativa descartada**: (a) guardar la clave en una variable pública de
+  Vite (`VITE_USDA_API_KEY`) y llamar a FDC desde el navegador, que es
+  exactamente lo que D-013 prohíbe y aquí sería peor: una cabecera de
+  identificación filtrada es molesta, una clave de API filtrada es un cupo
+  ajeno agotado por cualquiera que abra las herramientas de desarrollo; (b)
+  un único archivo de manejadores para OFF y USDA, más corto de escribir hoy y
+  más caro de leer en cuanto una de las dos fuentes cambie su formato de
+  error y haya que averiguar si afecta a la otra.
+- **Consecuencias**: un fallo real se encontró escribiendo los tests y no a
+  ojo: `new URL(ruta, base)` trata una ruta que empieza por "/" como absoluta,
+  y sustituye toda la ruta de la base en lugar de añadirse a ella. Con
+  `FDC_BASE` sin barra final, `buildFoodUrl` perdía el "/fdc/v1" de la URL
+  real y apuntaba a un dominio que no existe. Se detectó porque el test
+  comprobaba la ruta completa (`url.pathname`) y no solo el dominio, que es la
+  comprobación que sí habría pasado con el error dentro. Corregido con la
+  barra final en la base y rutas relativas sin barra inicial.

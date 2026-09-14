@@ -1,5 +1,6 @@
 import type { BaseUnit } from '@/domain/food/food';
 import type { MacroKey } from '@/domain/nutrition/macros';
+import { unitOf, type MicronutrientId } from '@/domain/nutrition/micronutrients';
 import type { Grams, Kilocalories, Quantity } from '@/domain/units/units';
 
 /**
@@ -78,4 +79,21 @@ export function formatGrams(value: Grams, locale = 'es-ES'): string {
  */
 export function formatQuantity(value: Quantity, unit: BaseUnit, locale = 'es-ES'): string {
   return `${numberFormat(locale, GRAMS_DIGITS).format(value)} ${unit}`;
+}
+
+/** Cómo se escribe cada unidad de micronutriente. "µg" y no "ug": es la grafía habitual en español. */
+const MICRONUTRIENT_UNIT_LABELS = { mg: 'mg', ug: 'µg' } as const;
+
+const MICRONUTRIENT_DIGITS = 1;
+
+/**
+ * Un micronutriente, en la unidad que le corresponda según el catálogo.
+ *
+ * Un solo decimal para todos, sean miligramos o microgramos, por el mismo
+ * motivo que los gramos de las macros: es donde el primer decimal ya
+ * distingue cantidades pequeñas (1,2 µg de B12 no es lo mismo que 1,0) sin
+ * llegar a una precisión que nadie va a usar para decidir nada.
+ */
+export function formatMicronutrient(id: MicronutrientId, value: number, locale = 'es-ES'): string {
+  return `${numberFormat(locale, MICRONUTRIENT_DIGITS).format(value)} ${MICRONUTRIENT_UNIT_LABELS[unitOf(id)]}`;
 }

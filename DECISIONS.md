@@ -1605,3 +1605,51 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   (la macro opcional de OFF) tampoco se deriva del sodio de FDC por el mismo
   motivo: convertir sodio en sal exige un factor (~2,5) que nadie ha medido
   para ese alimento concreto.
+
+---
+
+## D-049 `goalsEffectiveOn` desempata por `updatedAt`, y los objetivos se editan creando una versión nueva
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: D-004 versiona los objetivos por `effectiveFrom` (un día, no un
+  instante), y hasta ahora nada lo había puesto a prueba porque no existía
+  todavía una pantalla que permitiera editar más de una vez el mismo día. Al
+  diseñar esa pantalla se vio el caso que D-004 dejaba sin resolver: dos
+  versiones con el mismo `effectiveFrom` (editar dos veces en un día) no tenían
+  un criterio de desempate. `goalsEffectiveOn` ordenaba solo por
+  `effectiveFrom` y se quedaba con la primera del array ordenado, así que ante
+  un empate el resultado dependía del orden en que Dexie devolviera las filas,
+  que no es un contrato estable.
+- **Decisión**: `goalsEffectiveOn` ordena primero por `effectiveFrom`
+  descendente y, en caso de empate, por `updatedAt` descendente. La pantalla de
+  objetivos (`features/goals/`) no ofrece "editar": cada envío del formulario
+  crea una `DailyGoals` nueva con `effectiveFrom` en el día de hoy y un `id`
+  nuevo, igual que D-004 exige, y dos guardados el mismo día son ahora el
+  camino normal de esta pantalla, no un caso raro que solo se daría manipulando
+  la base de datos a mano.
+
+  La pantalla edita solo las cuatro macros y la fibra. No pide un objetivo por
+  micronutriente: la decisión 13, ya aprobada, hace que el panel de la fase 2
+  use los valores de referencia oficiales de `reference-intakes.ts` cuando no
+  hay un objetivo propio, así que fijar veintidós cifras a mano no hace falta
+  para que ese panel funcione. `DailyGoals.micros` ya tiene sitio para
+  guardarlo si algún día se decide lo contrario, y esta versión no lo toca: al
+  guardar, conserva lo que hubiera en la versión anterior en lugar de
+  vaciarlo.
+- **Por qué**: quien edita un objetivo dos veces seguidas espera que gane la
+  segunda edición, no una casualidad del almacenamiento. Es el mismo principio
+  que ya sostenía D-006 (una lápida existe porque el orden de llegada de los
+  cambios no se puede dar por supuesto) aplicado a un empate en vez de a un
+  borrado. Pedir un objetivo por micronutriente antes de que el panel lo
+  necesite habría sido trabajo adelantado que CLAUDE.md pide evitar, y una
+  pantalla más que rellenar sin beneficio inmediato, que es justo lo que D-016
+  ya señaló como un coste a no repetir.
+- **Alternativa descartada**: (a) editar en el sitio la versión vigente en vez
+  de crear una nueva, que rompería D-004: perdería la posibilidad de ver qué
+  objetivo regía un día concreto del pasado si ese día coincidiera con la
+  fecha de la versión editada; (b) desempatar por un contador de versión
+  incremental en vez de por `updatedAt`, descartado porque ya existe un campo
+  con esa información exacta (`Persisted.updatedAt`) y añadir un segundo sería
+  la misma trampa de dos fuentes de verdad que D-014 evita con los campos
+  derivados de almacenamiento.

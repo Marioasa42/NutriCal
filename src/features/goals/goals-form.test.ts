@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { parseGoalsForm, type GoalsFormFields } from '@/features/goals/goals-form';
 
 function fields(overrides: Partial<GoalsFormFields> = {}): GoalsFormFields {
-  return { energy: '2000', protein: '100', carbohydrates: '250', fat: '70', fiber: '', ...overrides };
+  return {
+    energy: '2000',
+    protein: '100',
+    carbohydrates: '250',
+    fat: '70',
+    fiber: '',
+    ...overrides,
+  };
 }
 
 describe('parseGoalsForm', () => {

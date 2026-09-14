@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 
 import type { FoodDraft } from '@/domain/food/draft';
-import type { Food } from '@/domain/food/food';
+import type { Food, FoodSource } from '@/domain/food/food';
+import { displayFoodName } from '@/services/usda/food-terms';
 import { formatEnergy, formatGrams, listMacroLabels } from '@/shared/lib/nutrient-format';
 
 /**
@@ -44,10 +45,23 @@ function Card({
   );
 }
 
-function Title({ name, brand }: { name: string; brand?: string | undefined }) {
+/**
+ * `displayFoodName` añade la pista en español entre paréntesis solo para
+ * alimentos de USDA (D-049): el nombre de la fuente va siempre primero y
+ * entero, la pista es una nota, nunca un reemplazo.
+ */
+function Title({
+  name,
+  source,
+  brand,
+}: {
+  name: string;
+  source: FoodSource;
+  brand?: string | undefined;
+}) {
   return (
     <div className="flex flex-col">
-      <span className="font-medium text-slate-900">{name}</span>
+      <span className="font-medium text-slate-900">{displayFoodName({ name, source })}</span>
       {brand === undefined ? null : <span className="text-sm text-slate-500">{brand}</span>}
     </div>
   );
@@ -72,7 +86,11 @@ export function FoodCard({
   return (
     <Card action={action}>
       <div className="flex items-start justify-between gap-4">
-        <Title name={food.name} {...(food.brand === undefined ? {} : { brand: food.brand })} />
+        <Title
+          name={food.name}
+          source={food.source}
+          {...(food.brand === undefined ? {} : { brand: food.brand })}
+        />
         <div className="flex shrink-0 flex-col items-end">
           <span className="font-semibold text-slate-900">{formatEnergy(macros.energy)}</span>
           <PerHundred unit={food.baseUnit} />
@@ -108,7 +126,11 @@ export function DraftCard({ draft, action }: { draft: FoodDraft; action?: ReactN
   return (
     <Card muted action={action}>
       <div className="flex items-start justify-between gap-4">
-        <Title name={draft.name} {...(draft.brand === undefined ? {} : { brand: draft.brand })} />
+        <Title
+          name={draft.name}
+          source={draft.source}
+          {...(draft.brand === undefined ? {} : { brand: draft.brand })}
+        />
         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-900">
           Faltan datos
         </span>

@@ -1674,56 +1674,11 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   búsquedas ya salían gratis en paralelo.
 - **Consecuencias**: esto no añade ninguna forma de editar
   `DailyGoals.micros` desde la interfaz, así que `targetSource` del panel de
-  micronutrientes (D-050, en otra rama todavía sin fusionar) sigue valiendo
-  `'reference'` siempre en la práctica. Lo que sí cambia es que ahora los
-  alimentos de USDA registrados en el diario aportan de verdad micronutrientes
-  al total del día, que es lo que ese panel necesitaba para tener algo que
-  enseñar más allá de lo que ya trajera Open Food Facts.
-## D-049 `goalsEffectiveOn` desempata por `updatedAt`, y los objetivos se editan creando una versión nueva
-- **Fecha**: 2026-09-14
-- **Fase**: 2
-- **Estado**: aceptada
-- **Contexto**: D-004 versiona los objetivos por `effectiveFrom` (un día, no un
-  instante), y hasta ahora nada lo había puesto a prueba porque no existía
-  todavía una pantalla que permitiera editar más de una vez el mismo día. Al
-  diseñar esa pantalla se vio el caso que D-004 dejaba sin resolver: dos
-  versiones con el mismo `effectiveFrom` (editar dos veces en un día) no tenían
-  un criterio de desempate. `goalsEffectiveOn` ordenaba solo por
-  `effectiveFrom` y se quedaba con la primera del array ordenado, así que ante
-  un empate el resultado dependía del orden en que Dexie devolviera las filas,
-  que no es un contrato estable.
-- **Decisión**: `goalsEffectiveOn` ordena primero por `effectiveFrom`
-  descendente y, en caso de empate, por `updatedAt` descendente. La pantalla de
-  objetivos (`features/goals/`) no ofrece "editar": cada envío del formulario
-  crea una `DailyGoals` nueva con `effectiveFrom` en el día de hoy y un `id`
-  nuevo, igual que D-004 exige, y dos guardados el mismo día son ahora el
-  camino normal de esta pantalla, no un caso raro que solo se daría manipulando
-  la base de datos a mano.
-
-  La pantalla edita solo las cuatro macros y la fibra. No pide un objetivo por
-  micronutriente: la decisión 13, ya aprobada, hace que el panel de la fase 2
-  use los valores de referencia oficiales de `reference-intakes.ts` cuando no
-  hay un objetivo propio, así que fijar veintidós cifras a mano no hace falta
-  para que ese panel funcione. `DailyGoals.micros` ya tiene sitio para
-  guardarlo si algún día se decide lo contrario, y esta versión no lo toca: al
-  guardar, conserva lo que hubiera en la versión anterior en lugar de
-  vaciarlo.
-- **Por qué**: quien edita un objetivo dos veces seguidas espera que gane la
-  segunda edición, no una casualidad del almacenamiento. Es el mismo principio
-  que ya sostenía D-006 (una lápida existe porque el orden de llegada de los
-  cambios no se puede dar por supuesto) aplicado a un empate en vez de a un
-  borrado. Pedir un objetivo por micronutriente antes de que el panel lo
-  necesite habría sido trabajo adelantado que CLAUDE.md pide evitar, y una
-  pantalla más que rellenar sin beneficio inmediato, que es justo lo que D-016
-  ya señaló como un coste a no repetir.
-- **Alternativa descartada**: (a) editar en el sitio la versión vigente en vez
-  de crear una nueva, que rompería D-004: perdería la posibilidad de ver qué
-  objetivo regía un día concreto del pasado si ese día coincidiera con la
-  fecha de la versión editada; (b) desempatar por un contador de versión
-  incremental en vez de por `updatedAt`, descartado porque ya existe un campo
-  con esa información exacta (`Persisted.updatedAt`) y añadir un segundo sería
-  la misma trampa de dos fuentes de verdad que D-014 evita con los campos
-  derivados de almacenamiento.
+  micronutrientes (D-050) sigue valiendo `'reference'` siempre en la
+  práctica. Lo que sí cambia es que ahora los alimentos de USDA registrados
+  en el diario aportan de verdad micronutrientes al total del día, que es lo
+  que ese panel necesitaba para tener algo que enseñar más allá de lo que ya
+  trajera Open Food Facts.
 
 ---
 
@@ -1732,7 +1687,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 - **Fase**: 2
 - **Estado**: aceptada
 - **Contexto**: con el cliente de USDA (D-048) y los objetivos editables
-  (D-049) ya en pie, tocaba la pieza que los une: enseñar, para cada uno de los
+  (D-052) ya en pie, tocaba la pieza que los une: enseñar, para cada uno de los
   veintidós micronutrientes, cuánto se lleva hoy frente a un objetivo, tal
   como pedía el plan de la fase 2 (decisiones 12 y 13, aprobadas de antemano).
   Dos preguntas quedaban abiertas al escribir el código: con qué se dibuja una
@@ -1752,7 +1707,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   3. **Objetivo con dos niveles** (decisión 13): `goals.micros[id]` si existe,
      y si no, la referencia oficial de `reference-intakes.ts` según el sexo
      del perfil. `DailyGoals` entero puede no existir todavía (perfil recién
-     creado, D-049 no lo crea por defecto), y se trata exactamente igual que
+     creado, D-052 no lo crea por defecto), y se trata exactamente igual que
      si existiera con `micros: {}`: los dos casos caen a la referencia. Para
      eso, `DaySummary.goals` (`domain/diary/day.ts`) pasa a ser opcional; no
      tenía ningún consumidor todavía, así que corregirlo no toca ninguna
@@ -1836,3 +1791,153 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   un segmento dinámico como último tramo de la ruta, que es lo único que
   existe hoy en `api/`; si algún día hiciera falta anidar una carpeta
   dinámica dentro de otra, es la única función que tocar.
+
+---
+
+## D-052 `goalsEffectiveOn` desempata por `updatedAt`, y los objetivos se editan creando una versión nueva
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: D-004 versiona los objetivos por `effectiveFrom` (un día, no un
+  instante), y hasta ahora nada lo había puesto a prueba porque no existía
+  todavía una pantalla que permitiera editar más de una vez el mismo día. Al
+  diseñar esa pantalla se vio el caso que D-004 dejaba sin resolver: dos
+  versiones con el mismo `effectiveFrom` (editar dos veces en un día) no tenían
+  un criterio de desempate. `goalsEffectiveOn` ordenaba solo por
+  `effectiveFrom` y se quedaba con la primera del array ordenado, así que ante
+  un empate el resultado dependía del orden en que Dexie devolviera las filas,
+  que no es un contrato estable.
+- **Decisión**: `goalsEffectiveOn` ordena primero por `effectiveFrom`
+  descendente y, en caso de empate, por `updatedAt` descendente. La pantalla de
+  objetivos (`features/goals/`) no ofrece "editar": cada envío del formulario
+  crea una `DailyGoals` nueva con `effectiveFrom` en el día de hoy y un `id`
+  nuevo, igual que D-004 exige, y dos guardados el mismo día son ahora el
+  camino normal de esta pantalla, no un caso raro que solo se daría manipulando
+  la base de datos a mano.
+
+  La pantalla edita solo las cuatro macros y la fibra. No pide un objetivo por
+  micronutriente: la decisión 13, ya aprobada, hace que el panel de la fase 2
+  use los valores de referencia oficiales de `reference-intakes.ts` cuando no
+  hay un objetivo propio, así que fijar veintidós cifras a mano no hace falta
+  para que ese panel funcione. `DailyGoals.micros` ya tiene sitio para
+  guardarlo si algún día se decide lo contrario, y esta versión no lo toca: al
+  guardar, conserva lo que hubiera en la versión anterior en lugar de
+  vaciarlo.
+- **Por qué**: quien edita un objetivo dos veces seguidas espera que gane la
+  segunda edición, no una casualidad del almacenamiento. Es el mismo principio
+  que ya sostenía D-006 (una lápida existe porque el orden de llegada de los
+  cambios no se puede dar por supuesto) aplicado a un empate en vez de a un
+  borrado. Pedir un objetivo por micronutriente antes de que el panel lo
+  necesite habría sido trabajo adelantado que CLAUDE.md pide evitar, y una
+  pantalla más que rellenar sin beneficio inmediato, que es justo lo que D-016
+  ya señaló como un coste a no repetir.
+- **Alternativa descartada**: (a) editar en el sitio la versión vigente en vez
+  de crear una nueva, que rompería D-004: perdería la posibilidad de ver qué
+  objetivo regía un día concreto del pasado si ese día coincidiera con la
+  fecha de la versión editada; (b) desempatar por un contador de versión
+  incremental en vez de por `updatedAt`, descartado porque ya existe un campo
+  con esa información exacta (`Persisted.updatedAt`) y añadir un segundo sería
+  la misma trampa de dos fuentes de verdad que D-014 evita con los campos
+  derivados de almacenamiento.
+
+---
+
+## D-053 USDA solo busca Foundation y SR Legacy, y un glosario propio traduce la búsqueda y explica el nombre
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: con USDA ya cableado en la pantalla de búsqueda (D-049), se
+  reportaron tres fallos usándolo de verdad: buscar "apple" o "manzana"
+  devolvía refrescos de marca casi idénticos y ninguna fruta fresca, que era
+  justo el problema que motivó añadir USDA. Verificado contra la API real, no
+  a ojo:
+
+  ```
+  GET /foods/search?query=apple                                → 25.709 resultados
+    primeros 3: Branded, Branded, Branded ("APPLE" de envasadoras)
+
+  GET /foods/search?query=apple&dataType=Foundation,SR Legacy   → 95 resultados
+    primeros: Apples, fuji/gala/honeycrisp, with skin, raw (Foundation)
+              Apples, raw, without skin (SR Legacy)
+
+  GET /foods/search?query=manzana                               → 62 resultados
+    todos "Branded": refrescos con "MANZANA" en el nombre por marketing
+    bilingüe ("APPLE MANZANA SODA"...), cero fruta
+
+  GET /foods/search?query=manzana&dataType=Foundation,SR Legacy → 0 resultados
+  ```
+
+  Y un tercer problema, encontrado por quien revisó esto y no por quien lo
+  reportó: el nombre que devuelve USDA está en inglés
+  ("Apples, raw, with skin"), y por la instantánea de D-003 ese nombre queda
+  copiado en el registro del diario para siempre. Sin decidir nada al
+  respecto, cualquier comida registrada desde USDA se habría quedado
+  congelada con un nombre en un idioma distinto al del resto de la
+  aplicación, y nadie lo habría notado hasta volver a mirar el diario semanas
+  después.
+- **Decisión**: tres piezas.
+
+  1. **`dataType=Foundation,SR Legacy` fijo en el servidor**
+     (`api/_lib/usda.ts`). No es un parámetro de `buildSearchUrl`, es una
+     constante dentro de la función: no existe ninguna llamada que pueda
+     construir la URL de búsqueda sin el filtro puesto. Un test lo comprueba
+     para cualquier consulta, incluida una vacía. "Survey (FNDDS)" queda
+     fuera también: es la base de encuestas dietéticas, con entradas de
+     plato preparado, no de ingrediente suelto.
+  2. **Un glosario propio, curado e incompleto a propósito**
+     (`services/usda/food-terms.ts`), de unos noventa alimentos frescos y
+     básicos en español, con sus variantes regionales (patata/papa,
+     aguacate/palta, fresa/frutilla). `translateSearchTerm` lo consulta antes
+     de construir la URL hacia `/api/usda/search`; si no conoce el término,
+     lo manda tal cual se escribió, sin bloquear ni inventar. El término que
+     de verdad ha salido se enseña siempre en la pantalla ("Buscando «apple»
+     (traducido de «manzana»)"), no solo cuando hay traducción: mostrarlo a
+     veces sí y a veces no daría a entender que las otras veces se buscó
+     justo lo escrito, y no siempre es cierto. Esto es a propósito distinto
+     de `reference-intakes.ts`: no cita ninguna tabla oficial porque no hay
+     ninguna que citar, es una ayuda de interfaz curada por mí, y el propio
+     archivo lo dice así.
+  3. **El nombre de la fuente nunca se traduce ni se sustituye.**
+     `displayFoodName` añade, solo para alimentos de USDA y solo cuando el
+     mismo glosario reconoce la primera palabra del nombre (antes de la
+     primera coma), una pista en español entre paréntesis:
+     "Apples, raw, with skin (manzana)". El nombre real va siempre primero y
+     entero; la pista es una nota, nunca un reemplazo, y se calcula al
+     enseñar el nombre, no se guarda: lo que persiste en el catálogo y en la
+     instantánea del diario (D-003) sigue siendo exactamente lo que dijo la
+     fuente, sin tocar. Se aplica en las cinco pantallas donde aparece el
+     nombre de un alimento: la búsqueda, la fila del diario (viva y borrada),
+     el formulario de editar y el de registrar.
+- **Por qué**: el filtro de tipo de dato no es un ajuste de relevancia, es la
+  definición de qué papel juega USDA en el proyecto: si vuelve a colarse
+  contenido de marca, USDA deja de aportar nada que Open Food Facts no
+  tuviera ya (D-049). El glosario resuelve el hueco de idioma sin las dos
+  cosas que se querían evitar: un servicio de traducción externo, y fingir
+  que una traducción automática de la frase entera sonaría bien en español
+  cuando en la práctica no lo haría. Y el nombre de la fuente no se toca
+  porque D-003 existe precisamente para que un registro del diario no dependa
+  de una interpretación nuestra que pueda cambiar: si el glosario mejora
+  mañana, la pista de un registro de hace un mes cambiaría con él, y eso está
+  bien porque es presentación, no el dato guardado; lo que no puede pasar es
+  que el dato guardado cambie.
+- **Alternativa descartada**: (a) dejar el filtro de tipo de dato como opción
+  de configuración en vez de una constante fija, descartado porque desactivarlo
+  no es un caso de uso legítimo del proyecto, es justo el bug que se está
+  arreglando, con un interruptor delante; (b) un servicio de traducción
+  externo para el idioma, descartado explícitamente por quien pidió esto: añade
+  una dependencia de red por buscar un alimento y una cuenta o clave más que
+  gestionar; (c) traducir la descripción completa palabra por palabra
+  (incluyendo "raw", "with skin", "without"), descartado porque el orden de
+  las palabras no es el mismo en los dos idiomas y el resultado sonaría a
+  traducido a máquina, que es exactamente la clase de solución a medias que
+  este proyecto evita en otros sitios (D-023, D-030: el redondeo y el formato
+  ocurren en un solo lugar y bien hechos, no aproximados en varios); (d)
+  traducir y GUARDAR el nombre en español, descartado por D-003: convertiría
+  una interpretación nuestra, que puede mejorar o corregirse, en un dato
+  congelado para siempre en el historial de cada persona.
+- **Consecuencias**: el glosario es de unos noventa alimentos y lo dice el
+  propio archivo; un alimento fuera de esa lista se busca en el idioma en que
+  se escriba y su nombre no lleva pista, que es el comportamiento honesto
+  (no inventar una traducción que no se tiene) y no un defecto a esconder.
+  Ampliar el glosario es añadir una línea a `FOOD_TERMS`, no cambiar ninguna
+  lógica.

@@ -56,6 +56,29 @@ describe('construcción de la URL de búsqueda', () => {
     expect(url.hostname).toBe('api.nal.usda.gov');
     expect(url.pathname).toBe('/fdc/v1/foods/search');
   });
+
+  it('nunca busca sin restringir a Foundation y SR Legacy, para cualquier consulta', () => {
+    // No es un ajuste de relevancia: es la definición de qué papel juega
+    // USDA en el proyecto. Comprobado contra la API real: sin este filtro,
+    // "apple" da 25.709 resultados dominados por productos de marca, que es
+    // justo el terreno que ya cubre Open Food Facts (D-049). `buildSearchUrl`
+    // no recibe el tipo de dato como parámetro a propósito, así que este test
+    // cubre TODA llamada posible, no un caso concreto entre varios.
+    for (const query of ['lentejas', '', 'apple', 'manzana', '   ']) {
+      const url = new URL(buildSearchUrl(query, 'clave', 25));
+      expect(url.searchParams.get('dataType')).toBe('Foundation,SR Legacy');
+    }
+  });
+
+  it('excluye explícitamente "Branded" y "Survey (FNDDS)"', () => {
+    // Los dos tipos que sí existen en FDC y que aquí no queremos: "Branded"
+    // duplica Open Food Facts, y "Survey (FNDDS)" es de plato preparado
+    // ("Apple pie filling"), no de ingrediente suelto.
+    const url = new URL(buildSearchUrl('lentejas', 'clave', 25));
+    const dataType = url.searchParams.get('dataType') ?? '';
+    expect(dataType).not.toContain('Branded');
+    expect(dataType).not.toContain('Survey');
+  });
 });
 
 describe('construcción de la URL de un alimento', () => {

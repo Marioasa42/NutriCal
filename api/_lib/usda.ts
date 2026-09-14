@@ -73,9 +73,26 @@ export function buildSearchUrl(query: string, apiKey: string, pageSize: number):
   return url.toString();
 }
 
+/**
+ * `format=abridged` no es un ahorro de peso: es lo que hace que la respuesta se
+ * pueda leer.
+ *
+ * Se comprobó contra la API real, no en la documentación: sin este parámetro,
+ * el formato por defecto ("full") da un `foodNutrients[]` cuya forma depende
+ * del tipo de dato de la fuente y que para los alimentos de marca ("Branded",
+ * que son la mayoría de lo que trae una búsqueda) **no lleva el número de
+ * nutriente en ningún sitio**, solo un identificador de fila interno y la
+ * cantidad. Sin ese número no hay manera de saber si una cifra es la vitamina
+ * C o el sodio. Con `format=abridged`, la fuente devuelve siempre la misma
+ * forma plana (`{ number, name, amount, unitName }`), igual para un alimento
+ * de marca que para uno de la base de datos histórica del USDA. Sin este
+ * parámetro, el cliente de la fase 2 que lee `number` para saber qué
+ * nutriente es cada cifra se quedaría ciego justo en el caso más común.
+ */
 export function buildFoodUrl(fdcId: number, apiKey: string): string {
   const url = new URL(`food/${fdcId}`, FDC_BASE);
   url.searchParams.set('api_key', apiKey);
+  url.searchParams.set('format', 'abridged');
   return url.toString();
 }
 

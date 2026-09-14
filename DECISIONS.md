@@ -1520,3 +1520,15 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   comprobaba la ruta completa (`url.pathname`) y no solo el dominio, que es la
   comprobación que sí habría pasado con el error dentro. Corregido con la
   barra final en la base y rutas relativas sin barra inicial.
+
+  Un segundo hallazgo, este comprobado contra la API real y no en su
+  documentación: el formato por defecto de `/food/{fdcId}` da un
+  `foodNutrients[]` cuya forma depende del tipo de dato de la fuente, y para
+  los alimentos de marca ("Branded", la mayoría de una búsqueda real) **no
+  lleva en ningún sitio el número que identifica cada nutriente**, solo un
+  identificador de fila interno y la cantidad. `buildFoodUrl` pide ahora
+  `format=abridged`, que da siempre la misma forma plana
+  (`{ number, name, amount, unitName }`) sea cual sea el tipo de dato. Sin
+  este parámetro, el cliente de la fase 2 que traduce el número de nutriente
+  de FDC a las claves de `Micronutrients` se habría quedado ciego justo en el
+  caso más común, y no en un caso raro.

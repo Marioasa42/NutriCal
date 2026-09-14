@@ -64,6 +64,14 @@ describe('construcción de la URL de un alimento', () => {
     expect(url.pathname).toBe('/fdc/v1/food/173410');
     expect(url.searchParams.get('api_key')).toBe('clave-123');
   });
+
+  it('pide el formato abreviado, sin el cual los alimentos de marca no traen el número de nutriente', () => {
+    // Comprobado contra la API real: el formato por defecto no da forma
+    // usable para los alimentos "Branded", que son la mayoría de una
+    // búsqueda. Ver el comentario de `buildFoodUrl`.
+    const url = new URL(buildFoodUrl(173410, 'clave-123'));
+    expect(url.searchParams.get('format')).toBe('abridged');
+  });
 });
 
 describe('validación del fdcId', () => {

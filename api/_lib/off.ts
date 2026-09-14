@@ -1,4 +1,4 @@
-import { normalizeForSearch } from './text.js';
+import { normalizeForSearch } from '../../contracts/text.js';
 
 /*
  * Nota sobre las importaciones con extensión `.js`: este proyecto se ejecuta como

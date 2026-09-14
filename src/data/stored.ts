@@ -1,6 +1,6 @@
 import type { Food } from '@/domain/food/food';
 import type { Persisted } from '@/domain/persistence/persisted';
-import { normalizeForSearch } from '@/shared/lib/text';
+import { normalizeForSearch } from '@contracts/text';
 
 /**
  * Forma en la que las entidades viven dentro de IndexedDB.

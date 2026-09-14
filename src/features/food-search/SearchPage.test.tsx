@@ -36,9 +36,17 @@ function renderSearch() {
   vi.stubGlobal('fetch', (input: RequestInfo | URL) => {
     // Solo llamamos con una cadena, pero el tipo de `fetch` admite tres formas y
     // `String()` sobre un `Request` daría "[object Object]" sin avisar.
-    calls.push(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    calls.push(url);
+    // Desde D-048 la pantalla sale a dos fuentes a la vez, y cada una espera
+    // una envoltura con forma distinta: sin esto, la respuesta de USDA no
+    // pasaría su propia validación y la pantalla mostraría un error en esa
+    // sección en vez del resultado vacío que el test espera.
+    const body = url.startsWith('/api/usda/')
+      ? { query: 'x', foods: [] }
+      : { query: 'x', page: 1, count: 0, products: [] };
     return Promise.resolve(
-      new Response(JSON.stringify({ query: 'x', page: 1, count: 0, products: [] }), {
+      new Response(JSON.stringify(body), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -101,14 +109,17 @@ describe('SearchPage', () => {
     expect(calls).toEqual([]);
   });
 
-  it('la búsqueda en la fuente sale al pulsar Intro, y una sola vez', async () => {
+  it('la búsqueda sale al pulsar Intro a las dos fuentes, y una sola vez a cada una', async () => {
+    // Desde D-048 la misma búsqueda confirmada sale a la vez a Open Food
+    // Facts y a USDA, en dos secciones separadas de la misma pantalla.
     const { calls } = renderSearch();
 
     type('leche entera');
     pressEnter();
 
     await waitFor(() => {
-      expect(calls).toHaveLength(1);
+      expect(calls.filter((url) => url.startsWith('/api/off/'))).toHaveLength(1);
+      expect(calls.filter((url) => url.startsWith('/api/usda/'))).toHaveLength(1);
     });
   });
 
@@ -119,9 +130,11 @@ describe('SearchPage', () => {
     pressEnter();
 
     // Sin esto, "Plátano" y "platano" son dos entradas de caché distintas en la
-    // red de distribución de Vercel, y las dos fallan (D-041).
+    // red de distribución de Vercel, y las dos fallan (D-041). No se compara
+    // `calls[0]` a secas porque las dos fuentes salen a la vez y su orden de
+    // llegada no es parte de lo que este test quiere fijar.
     await waitFor(() => {
-      expect(calls[0]).toBe('/api/off/search?q=platano');
+      expect(calls).toContain('/api/off/search?q=platano');
     });
   });
 
@@ -140,9 +153,8 @@ describe('SearchPage', () => {
 
     type('le');
 
-    expect(screen.getByRole('button', { name: 'Buscar en Open Food Facts' })).toHaveProperty(
-      'disabled',
-      true,
-    );
+    expect(
+      screen.getByRole('button', { name: 'Buscar en Open Food Facts y en USDA FoodData Central' }),
+    ).toHaveProperty('disabled', true);
   });
 });

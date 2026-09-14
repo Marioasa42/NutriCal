@@ -53,6 +53,21 @@ export class NutriCalDatabase extends Dexie {
       goals: 'id, isDeleted, [isDeleted+effectiveFrom]',
       profile: 'id, isDeleted',
     });
+
+    /**
+     * Versión 2: añade el índice que le faltaba a `source.fdcId`.
+     *
+     * D-015 dice que la versión 1 queda congelada y cualquier cambio de
+     * esquema entra como una versión nueva, nunca editando la línea existente.
+     * No hace falta una función `.upgrade()`: no se transforma ningún dato,
+     * solo se indexa un campo que ya existía en todos los alimentos de fuente
+     * USDA desde D-047. Dexie construye el índice solo, leyendo las filas que
+     * ya hay.
+     */
+    this.version(2).stores({
+      foods:
+        'id, isDeleted, [isDeleted+source.barcode], [isDeleted+source.fdcId], [isDeleted+searchText], updatedAt',
+    });
   }
 }
 

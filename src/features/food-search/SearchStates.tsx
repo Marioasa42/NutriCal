@@ -13,7 +13,8 @@ import { describeOffError } from '@/shared/lib/off-error-messages';
  * enseñar los otros.
  */
 
-function Panel({ children }: { children: ReactNode }) {
+/** Exportado porque `UsdaSearchStates.tsx` dibuja el mismo marco con texto propio de esa fuente. */
+export function Panel({ children }: { children: ReactNode }) {
   return (
     <div
       // `polite` para que un lector de pantalla anuncie el cambio de estado sin

@@ -58,7 +58,16 @@ function PerHundred({ unit }: { unit: 'g' | 'ml' }) {
   return <span className="text-xs text-slate-500">por 100 {unit}</span>;
 }
 
-export function FoodCard({ food, action }: { food: Food; action?: ReactNode }) {
+export function FoodCard({
+  food,
+  action,
+  note,
+}: {
+  food: Food;
+  action?: ReactNode;
+  /** Un aviso corto bajo las macros. Hoy lo usa USDA para decir que los micronutrientes llegan al añadir (D-048). */
+  note?: string;
+}) {
   const { macros } = food.per100;
   return (
     <Card action={action}>
@@ -74,6 +83,7 @@ export function FoodCard({ food, action }: { food: Food; action?: ReactNode }) {
         <Macro label="Hidratos" value={formatGrams(macros.carbohydrates)} />
         <Macro label="Grasas" value={formatGrams(macros.fat)} />
       </dl>
+      {note === undefined ? null : <p className="mt-2 text-xs text-slate-500">{note}</p>}
     </Card>
   );
 }

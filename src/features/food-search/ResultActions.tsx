@@ -1,18 +1,26 @@
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import type { FoodDraft } from '@/domain/food/draft';
 import type { Food } from '@/domain/food/food';
 import type { LocalDate } from '@/domain/time/local-date';
+import { useCompleteUsdaFood } from '@/features/food-search/useCompleteUsdaFood';
 
 /**
  * Qué se puede hacer con un resultado.
  *
- * Las dos acciones son enlaces, y eso no es casualidad ni pereza: el alimento ya
- * está guardado en el catálogo local cuando la tarjeta se dibuja (D-013), así
- * que para registrarlo basta con ir a una dirección que lleve su identificador.
- * Con un botón que primero escribiera y luego navegara, esta funcionalidad
- * tendría que importar código de la del diario, y la dirección de las
- * dependencias de D-027 dice que eso no puede ser.
+ * Para OFF, la acción es un enlace, y eso no es casualidad ni pereza: el
+ * alimento ya está guardado en el catálogo local cuando la tarjeta se dibuja
+ * (D-013), así que para registrarlo basta con ir a una dirección que lleve su
+ * identificador. Con un botón que primero escribiera y luego navegara, esta
+ * funcionalidad tendría que importar código de la del diario, y la dirección
+ * de las dependencias de D-027 dice que eso no puede ser.
+ *
+ * Para USDA, `AddUsdaFoodLink` rompe ese patrón a propósito: un resultado de
+ * USDA nace sin micronutrientes (D-048), así que "añadir" no puede ser
+ * navegar sin más, tiene que completar primero. Eso sigue sin tocar `diary/`:
+ * `useCompleteUsdaFood` solo conoce el repositorio de alimentos y el
+ * servicio de USDA, ninguno de los dos es de la funcionalidad del diario, así
+ * que D-027 se sostiene igual.
  */
 
 /** Llevar un alimento completo al formulario de registro. */
@@ -57,4 +65,60 @@ export function CompleteDraftLink({ date, draft }: { date: LocalDate; draft: Foo
       Completar y añadir
     </Link>
   );
+}
+
+/**
+ * Añadir un alimento de USDA al diario: completa su panel de micronutrientes
+ * antes de navegar, en vez de navegar directamente (D-048).
+ *
+ * `useCompleteUsdaFood` ya sabe no volver a pedir la ficha si el alimento
+ * llega con micronutrientes (una visita anterior ya lo completó), así que
+ * este botón también sirve, sin cambios, para un alimento de USDA que
+ * aparece en "En tu catálogo" mientras se teclea.
+ */
+export function AddUsdaFoodLink({ date, food }: { date: LocalDate; food: Food }) {
+  const navigate = useNavigate();
+  const complete = useCompleteUsdaFood();
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={() => {
+          complete.mutate(food, {
+            onSuccess: (result) => {
+              if (result.kind === 'completed') {
+                void navigate(`/dia/${date}/registrar/${result.food.id}`);
+              }
+            },
+          });
+        }}
+        disabled={complete.isPending}
+        className="inline-block rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800 disabled:bg-slate-300"
+      >
+        {complete.isPending ? 'Completando…' : 'Añadir al diario'}
+      </button>
+      {complete.isError || complete.data?.kind === 'unavailable' ? (
+        <span className="text-xs text-red-700">No se ha podido completar. Prueba otra vez.</span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * La acción que corresponde según de dónde salió el alimento.
+ *
+ * Vive aquí, y no repetida en cada pantalla que enseña una tarjeta, porque
+ * `SearchResults.tsx` la necesita tanto para los resultados recién traídos
+ * como para "en tu catálogo", y las dos listas pueden mezclar alimentos de
+ * las dos fuentes.
+ */
+export function FoodAction({ date, food }: { date: LocalDate; food: Food }) {
+  switch (food.source.kind) {
+    case 'usda':
+      return <AddUsdaFoodLink date={date} food={food} />;
+    case 'openFoodFacts':
+    case 'custom':
+      return <AddToDiaryLink date={date} food={food} />;
+  }
 }

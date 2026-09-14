@@ -7,6 +7,20 @@ import { now, type Instant } from '@/domain/time/local-date';
 import { normalizeForSearch } from '@contracts/text';
 
 /**
+ * La clave de caché de TanStack Query para un alimento del catálogo, por
+ * identificador.
+ *
+ * Vive aquí, junto al repositorio, y no en `features/diary/queries.ts` donde
+ * nació: desde que USDA necesita completar un alimento después de adoptarlo
+ * (D-048), tanto `features/diary/` como `features/food-search/` necesitan
+ * invalidar la misma clave, y D-027 prohíbe que una funcionalidad importe de
+ * la otra. El repositorio es el único sitio que las dos ya importaban.
+ */
+export const foodKeys = {
+  byId: (id: FoodId) => ['db', 'food', id] as const,
+};
+
+/**
  * Catálogo local de alimentos.
  *
  * Guarda todo lo que se ha consultado alguna vez, de modo que la búsqueda pueda
@@ -47,15 +61,29 @@ export function createFoodRepository(database: NutriCalDatabase) {
      *    recién traída de la fuente nunca las lleva. Sobrescribir sería tirar
      *    trabajo de la persona usuaria sin avisar.
      *
-     * Un alimento sin código de barras no se puede comparar con nada, así que se
-     * guarda tal cual: dos manzanas creadas a mano son dos alimentos distintos
-     * mientras nadie diga lo contrario.
+     * Un alimento sin código de barras ni identificador de FDC no se puede
+     * comparar con nada, así que se guarda tal cual: dos manzanas creadas a
+     * mano son dos alimentos distintos mientras nadie diga lo contrario.
+     *
+     * El mismo trato para `fdcId` que para el código de barras, y por el
+     * mismo motivo exacto: sin él, buscar dos veces el mismo alimento de USDA
+     * crearía dos filas del catálogo para el mismo producto.
      */
     async adopt(food: Food): Promise<Food> {
       if (food.source.kind === 'openFoodFacts') {
         const known = await database.foods
           .where('[isDeleted+source.barcode]')
           .equals([ALIVE, food.source.barcode])
+          .first();
+        if (known !== undefined) {
+          return fromStoredFood(known);
+        }
+      }
+
+      if (food.source.kind === 'usda') {
+        const known = await database.foods
+          .where('[isDeleted+source.fdcId]')
+          .equals([ALIVE, food.source.fdcId])
           .first();
         if (known !== undefined) {
           return fromStoredFood(known);

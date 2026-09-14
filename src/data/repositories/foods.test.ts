@@ -148,6 +148,28 @@ describe('repositorio de alimentos', () => {
       expect(adopted.completion.userFilled).toEqual(['protein']);
     });
 
+    it('reutiliza el que ya estaba, cuando lo que coincide es el fdcId de USDA', async () => {
+      // Mismo caso que el del código de barras, con una fuente distinta: sin
+      // esto, buscar dos veces el mismo alimento de USDA duplicaría la fila.
+      const first = makeFood({ name: 'Lentejas', fdcId: 173410 });
+      const second = makeFood({ name: 'Lentejas', fdcId: 173410 });
+      expect(second.id).not.toBe(first.id);
+
+      await foods.adopt(first);
+      const adopted = await foods.adopt(second);
+
+      expect(adopted.id).toBe(first.id);
+      expect(await foods.all()).toHaveLength(1);
+    });
+
+    it('un fdcId de USDA no se confunde con un código de barras de OFF', async () => {
+      const usda = await foods.adopt(makeFood({ name: 'Lentejas', fdcId: 173410 }));
+      const off = await foods.adopt(makeFood({ name: 'Lentejas de bote', barcode: '173410' }));
+
+      expect(off.id).not.toBe(usda.id);
+      expect(await foods.all()).toHaveLength(2);
+    });
+
     it('guarda tal cual lo que no tiene código de barras', async () => {
       // Dos manzanas creadas a mano son dos alimentos distintos: no hay nada
       // con lo que compararlas.

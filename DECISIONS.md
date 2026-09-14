@@ -1535,3 +1535,73 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   este parámetro, el cliente de la fase 2 que traduce el número de nutriente
   de FDC a las claves de `Micronutrients` se habría quedado ciego justo en el
   caso más común, y no en un caso raro.
+
+---
+
+## D-048 El cliente de USDA nace en dos etapas: identidad y macros al buscar, micronutrientes al completar
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: al escribir `services/usda/` (D-047 puso el servidor; faltaba
+  el cliente) se comprobó contra la API real que `/foods/search` y
+  `/food/{fdcId}?format=abridged` no traen el mismo dato. Una búsqueda real de
+  un alimento de marca trae 10-14 nutrientes básicos; la ficha completa trae
+  el panel entero. Guardar directamente lo que da la búsqueda como si fuera
+  el perfil definitivo habría congelado en el catálogo, y más tarde en el
+  historial (D-003), un alimento con aspecto de dato completo y la mayoría de
+  sus micronutrientes ausentes sin que nadie lo hubiera decidido.
+- **Decisión**: dos funciones de normalización, no una. `normalizeSearchFood`
+  convierte un resultado de búsqueda en un `Food`/`FoodDraft` con identidad y
+  macros, y con `micros: {}` a propósito. `normalizeFoodDetail` convierte la
+  ficha en el mismo tipo, con el panel de veintiún micronutrientes completo
+  (el yodo queda siempre ausente: ver más abajo). La tarjeta de un resultado
+  de USDA en la interfaz debe decir que los micronutrientes se completan al
+  añadir, y registrar un alimento de USDA en el diario debe pasar antes por
+  `fetchUsdaFoodProfile` (que llama a la ficha y normaliza con
+  `normalizeFoodDetail`), nunca tomar la instantánea de D-003 directamente
+  del resultado de búsqueda.
+
+  De paso, dos piezas que ya no eran solo de Open Food Facts se movieron a
+  `services/shared/`: el vocabulario de error (`API_ERROR_CODES`,
+  `apiErrorSchema`, antes en `off/schemas.ts`) y el contexto de normalización
+  (`NormalizationContext`, antes en `off/normalize.ts`). Las dos fuentes
+  comparten literalmente el mismo contrato de error (`api/_lib/http.ts` define
+  un único `ErrorCode` para las dos, D-047) y el mismo concepto de
+  dependencias impuras inyectadas (reloj, generador de identificadores). Cada
+  cliente sigue declarando su propia unión de error (`OffErrorCode`,
+  `UsdaErrorCode`) y su propia comprobación de sincronía en tiempo de
+  compilación, porque el manejo de errores de una fuente no debe depender del
+  de la otra, pero la lista de códigos posibles y el contexto de
+  normalización sí son, de verdad, la misma cosa.
+- **Por qué**: es la misma regla que ya cerró D-001 y D-002 aplicada a una
+  fuente nueva. "Ausente" en `Micronutrients` significa "desconocido", y un
+  resultado de búsqueda de USDA sin panel de micronutrientes es honestamente
+  eso: desconocido todavía, no cero. El problema no es la representación, que
+  ya es correcta por construcción; es la trampa de dejar que ese desconocido
+  se congele para siempre en el momento de registrar la comida, cuando el
+  dato completo estaba a una petición de distancia.
+- **Alternativa descartada**: (a) pedir la ficha completa por cada fila de un
+  resultado de búsqueda, en cuanto aparece en pantalla. Da micronutrientes en
+  la lista, pero multiplica las peticiones a FDC por el número de resultados
+  visibles, el mismo error de fondo que D-041 corrigió para Open Food Facts,
+  aplicado a una fuente distinta; (b) tratar el resultado de búsqueda como
+  suficiente y no completar nunca, que habría sido más simple pero traiciona
+  D-003 con datos incompletos que aparentan estar completos.
+- **Consecuencias**: queda pendiente de mi revisión en qué paso concreto entra
+  el cableado de esto en la pantalla de búsqueda (el aviso "se completa al
+  añadir" en la tarjeta, y la llamada a `fetchUsdaFoodProfile` antes de
+  navegar a registrar). Este PR entrega solo la capa de servicio
+  (`services/usda/schemas.ts`, `nutrients.ts`, `normalize.ts`, `client.ts`,
+  `index.ts`), probada de forma aislada, sin tocar `SearchPage` ni
+  `SearchResults`: es la elección conservadora mientras no se decida si ese
+  cableado es un paso propio o entra en el del panel de micronutrientes.
+
+  El yodo (`iodine`) no tiene número de nutriente FDC mapeado. FDC lo
+  alimenta desde una base de colaboración NIH/FDA/USDA aparte del panel
+  habitual, la inmensa mayoría de alimentos no lo declaran, y no hay un
+  número único y fiable para él en lo que trae una búsqueda o una ficha
+  normales. Queda siempre ausente para un alimento de fuente USDA (D-001):
+  inventarlo sería presentar una estimación con aspecto de dato real. `salt`
+  (la macro opcional de OFF) tampoco se deriva del sodio de FDC por el mismo
+  motivo: convertir sodio en sal exige un factor (~2,5) que nadie ha medido
+  para ese alimento concreto.

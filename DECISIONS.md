@@ -1193,6 +1193,8 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 - **Fecha**: 2026-09-14
 - **Fase**: 1
 - **Estado**: aceptada
+
+- **Estado**: propuesta
 - **Contexto**: el diagnóstico de D-040 destapó una causa anterior. Midiendo el
   par `useDebouncedValue` + `useFoodSearch` con el cliente y el `QueryClient`
   reales, teclear "leche entera" produce **una** petición si se teclea a menos de
@@ -1243,3 +1245,4 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   botones llamados Buscar en la misma pantalla, indistinguibles para un lector
   de pantalla, y que la consulta confirmada puede vivir en la URL en lugar de en
   un `useState`, lo que elimina el `useEffect` que sincronizaba las dos.
+

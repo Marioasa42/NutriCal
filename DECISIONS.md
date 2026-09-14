@@ -951,3 +951,196 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   aplica. Son dos reglas con el mismo número, no una regla en dos sitios.
   `contracts/` queda con dos habitantes y la prueba de admisión de D-031 sigue
   siendo la única puerta de entrada.
+
+- **Contexto**: para registrar una comida hace falta llevar un alimento desde la
+  pantalla de resultados hasta un formulario. Lo primero que apetece es un botón
+  que abra un diálogo con el alimento en memoria, o un botón que escriba en
+  Dexie y luego navegue.
+- **Decisión**: registrar es la pantalla `/dia/:date/registrar/:foodId`, y lo
+  único que viaja es el identificador. Para que ese identificador exista
+  siempre, la búsqueda guarda en el catálogo local todo lo que trae, que es lo
+  que D-013 ya decía y hasta ahora no se había implementado. El repositorio gana
+  `adopt`, que devuelve el alimento que hay que usar: si ese código de barras ya
+  estaba, devuelve el guardado y **no lo pisa**. Las tarjetas de resultado
+  reciben su acción por un hueco (`action`), así que la misma tarjeta sirve en
+  la búsqueda y en la pantalla de un código de barras.
+- **Por qué**: son tres problemas resueltos por el mismo sitio. El primero es el
+  de D-032: quien produce un alimento no debe saber qué pasa después, y con una
+  dirección la pantalla se recarga y se comparte. El segundo es la dirección de
+  las dependencias de D-027: si la acción fuera un botón que escribe y navega,
+  la funcionalidad de búsqueda tendría que importar código de la del diario;
+  siendo un enlace, solo produce una URL y nadie importa a nadie. El tercero es
+  que `adopt` no sobrescriba: la normalización genera un identificador nuevo en
+  cada llamada, así que sin esto el mismo yogur buscado dos veces serían dos
+  filas, y además la copia guardada puede llevar cifras completadas a mano que
+  la recién traída nunca lleva.
+- **Alternativa descartada**: (a) un diálogo con el alimento en memoria, que no
+  tiene dirección, se pierde al recargar y ata la pantalla de destino al estado
+  de la de origen; (b) botón que adopta al pulsar, que obliga al cruce entre
+  funcionalidades descrito arriba; (c) pasar el alimento por el estado del
+  router, que no sobrevive a recargar y deja la pantalla sin nada que enseñar;
+  (d) que `adopt` sobrescriba siempre, más simple y que tira sin avisar el
+  trabajo de quien completó un producto a mano.
+- **Consecuencias**: cada búsqueda escribe sus resultados en IndexedDB. Es lo
+  que D-013 pedía y lo que habilitará buscar primero en local, pero si esa
+  escritura falla no puede tumbar una búsqueda que ha ido bien: se devuelve la
+  página sin adoptar y el enlace de añadir acaba en la rama "ese alimento no
+  está en tu catálogo", que la pantalla de destino ya explica. Y la vista previa
+  del formulario es literalmente el registro que se va a guardar, construido con
+  la misma función; por eso `build` llega como propiedad, de modo que editar un
+  registro pueda pasar otra sin tocar el formulario.
+
+## D-035 La marca de un total incompleto es "sobre N de M registros", y la estimación es una insignia
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: pendiente de revisión
+- **Contexto**: D-026 fijó que una cifra con `unknown` mayor que cero nunca se
+  enseña sola, y dejó escrito a propósito que la forma concreta de la marca se
+  decidía aparte. Hacía falta elegirla para poder pintar la primera cifra.
+- **Decisión**: existe `shared/ui/NutrientValue`, el único componente que enseña
+  la cifra de un nutriente. Lleva dos marcas distintas: `unknown` se escribe como
+  "sobre N de M registros" junto al número, y `estimated` como una insignia con
+  el texto "estimación", para las cifras que rellenó a mano la persona usuaria
+  (D-002). Un `unknown` de cero no se enseña.
+- **Por qué**: de las tres formas que D-026 mencionaba, esta es la que se
+  entiende sin aprender nada y no depende de que nadie pase el ratón por encima
+  ni despliegue un detalle, que era justo lo que esa decisión descartaba. Que
+  las dos marcas vivan en el mismo componente es lo que hace cumplible la regla:
+  una pantalla nueva no puede olvidarse de ponerlas porque no son cosa suya.
+  Enseñar "sobre 5 de 5" cuando no falta nada sería ruido, y el ruido enseña a
+  ignorar la marca justo cuando sí importa.
+- **Alternativa descartada**: (a) un signo junto a la cifra, tipo asterisco, que
+  ocupa menos y obliga a buscar la leyenda; (b) el recuento solo en un detalle
+  desplegable, que D-026 ya descartó porque engaña a quien no despliega; (c) dos
+  componentes distintos, uno para el recuento y otro para la estimación, que
+  reparte en dos sitios una regla que hay que cumplir siempre.
+- **Nota**: queda marcada como pendiente de revisión porque es una decisión de
+  presentación tomada sobre la marcha para no bloquear el paso 5. Cierra el
+  pendiente que D-026 dejó abierto, pero el texto y la forma son revisables sin
+  tocar nada más que este componente.
+
+## D-036 TanStack Query también para lo local, con `networkMode: 'always'`, y sin React Hook Form todavía
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: la pantalla de registro lee un alimento de IndexedDB y escribe un
+  registro. Hacía falta decidir con qué se hace eso, porque CLAUDE.md reserva
+  TanStack Query para "datos del servidor" y el stack menciona React Hook Form
+  para formularios.
+- **Decisión**: las lecturas y escrituras de Dexie usan TanStack Query, con
+  claves que empiezan por `db` para distinguirlas de las de `off`, y **siempre**
+  con `networkMode: 'always'`. Los formularios de la fase 1 se hacen con
+  `useState`; React Hook Form no se instala todavía.
+- **Por qué**: lo que hace falta para una lectura local es lo mismo que para una
+  remota: estados de carga y error, una caché compartida entre pantallas y una
+  forma de decir "esto ha cambiado" tras escribir. Añadir `dexie-react-hooks`
+  sería una dependencia más y dos modelos mentales en la misma aplicación, y
+  hacerlo con `useEffect` significa escribir a mano el cargando, el error y la
+  invalidación en cada pantalla. Lo de `networkMode` no es un detalle de
+  configuración: por defecto TanStack Query no intenta siquiera una consulta
+  cuando el navegador dice que no hay red, cosa correcta para Open Food Facts
+  (D-029) y absurda para IndexedDB. Sin esa línea, el diario se quedaría en
+  blanco en el metro con los datos dentro del propio dispositivo, que es
+  exactamente lo contrario de la decisión 5 del proyecto.
+- **Alternativa descartada**: (a) `dexie-react-hooks`, que da reactividad viva
+  sobre las consultas y es realmente cómodo, pero es una dependencia nueva para
+  un problema que la que ya está resuelve; (b) `useEffect` con `useState`, sin
+  dependencias y con los estados a mano en cada pantalla; (c) instalar React
+  Hook Form ahora, que para un formulario de tres campos añade una biblioteca
+  que habría que defender sin que resuelva nada que duela hoy.
+- **Consecuencias**: toda consulta o mutación contra Dexie tiene que llevar
+  `networkMode: 'always'`. Es fácil de olvidar y no falla en desarrollo, donde
+  siempre hay red; si aparece una tercera, conviene un ayudante que lo ponga por
+  defecto. React Hook Form se reconsidera en la fase 2, con el editor de
+  objetivos, que sí tiene bastantes campos y validación cruzada.
+
+## D-037 La pantalla del día agrupa por momento, y los totales son una proyección
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: el paso 6 tenía que enseñar lo registrado y los totales. Quedaba
+  decidir cómo se ordena, dónde se calcula y quién enseña las cifras.
+- **Decisión**: los registros se agrupan por momento del día y, dentro de cada
+  uno, en el orden en que se escribieron, que es el que devuelve el repositorio.
+  Los totales se calculan al pintar con `dayTotals` y no se guardan en ninguna
+  tabla. Toda cifra de un nutriente pasa por `NutrientValue`, con su recuento de
+  `unknown` cuando lo hay (D-026, D-035). La pantalla del día se queda en
+  `app/routes` como marco, y lo que va dentro vive en `features/diary`.
+- **Por qué**: agrupar por momento se parece a cómo se come, y quien mira el
+  diario busca "qué cené" antes que "qué registré a las ocho y cuarto". Los
+  totales no se guardan porque son una proyección de los registros: una fila
+  guardada sería una segunda verdad que habría que mantener sincronizada, y un
+  error de escalado quedaría congelado, que es lo mismo que D-003 razonó para el
+  registro. Y separar el marco de lo que va dentro es lo que hace que la pantalla
+  del día no crezca cada vez que el diario aprenda a enseñar algo nuevo.
+- **Alternativa descartada**: (a) una lista plana por hora de registro, más
+  simple y que obliga a leerla entera para saber qué se comió en cada momento;
+  (b) guardar un resumen del día en su propia tabla, que acelera una consulta que
+  ya es instantánea a cambio de duplicar la verdad; (c) que cada pantalla
+  formatee sus cifras por su cuenta, que es exactamente lo que D-026 prohíbe
+  porque la marca del recuento se acabaría olvidando en alguna.
+- **Consecuencias**: `dayTotals` recibe una lista de ejercicio vacía, porque el
+  ejercicio llega en la fase 5. Se pasa igualmente para no tocar la llamada
+  cuando exista. En la fase 2, el panel de micronutrientes se añade a esta misma
+  pantalla usando el mismo componente de cifra.
+
+## D-038 Borrar un registro se confirma en dos pasos, y la lápida no se ofrece deshacer
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: pendiente de revisión
+- **Contexto**: D-006 ya decidió que borrar escribe una lápida y nunca elimina la
+  fila. Lo que no estaba decidido es qué ve quien pulsa "borrar".
+- **Decisión**: el botón pregunta antes, en la propia fila y sin diálogo del
+  navegador: "Borrar" se convierte en "Sí, borrar" y "No". No se ofrece deshacer
+  después, ni una papelera desde la que recuperar.
+- **Por qué**: la fila sigue existiendo en la base de datos, pero desde la
+  interfaz no hay forma de recuperarla, así que para quien usa la aplicación el
+  borrado es definitivo y preguntar es lo mínimo. Se hace en la fila, y no con
+  `window.confirm`, porque el diálogo del navegador bloquea la página entera, no
+  se puede escribir en español sin que el navegador meta sus propios botones y
+  queda fuera del estilo de la aplicación.
+- **Alternativa descartada**: (a) borrar sin preguntar, que con un toque mal dado
+  en el móvil pierde un registro; (b) `window.confirm`, descrito arriba; (c) un
+  "deshacer" temporal tipo aviso flotante, que es lo mejor de las tres para quien
+  lo usa y necesita un componente de avisos, un temporizador y decidir qué pasa si
+  te vas de la pantalla antes de que expire. Es la mejor candidata a sustituir a
+  esta decisión, y por eso queda anotada.
+- **Nota**: pendiente de revisión. Es una decisión de interfaz tomada sobre la
+  marcha para no bloquear el paso 6.
+
+## D-039 El sembrado de ejemplo usa identificadores fijos y entra en el paso 6
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-016 adelantó el sembrado de datos de ejemplo al paso 2 o 3 de
+  la fase 1, para que las previsualizaciones no se vieran vacías. En la práctica
+  no se hizo entonces, y llega ahora con la pantalla del día, que es donde el
+  ejemplo se puede ver de verdad.
+- **Decisión**: los datos de ejemplo se construyen con las mismas funciones del
+  dominio y se escriben con los mismos repositorios que usa la aplicación, con
+  **identificadores fijos** conocidos. Se cargan en el día que se está mirando,
+  solo al pulsar el botón, y se retiran escribiendo lápidas sobre esos
+  identificadores (D-006). Los alimentos de ejemplo tienen origen `custom`.
+- **Por qué**: los identificadores fijos son lo que permite retirar el ejemplo
+  sin inventar una marca de "esto es de mentira" dentro del dominio, que
+  contaminaría todas las entidades para siempre por una necesidad de
+  demostración. Usar los repositorios de verdad hace que el sembrado sea, de
+  paso, una prueba de humo de la capa de datos: si siembra, la escritura
+  funciona. Y el origen es `custom` porque inventar un código de barras haría
+  pasar un dato falso por un dato de la fuente, y además chocaría con el catálogo
+  real en cuanto alguien buscara ese producto.
+- **Alternativa descartada**: (a) escribir directamente en las tablas de Dexie,
+  más corto y que no demuestra nada porque se salta justo el código que se quiere
+  enseñar; (b) una bandera `isSample` en las entidades, que mete una necesidad de
+  demostración dentro del modelo de dominio y habría que arrastrar hasta la
+  sincronización de la fase 4; (c) sembrar automáticamente al abrir la aplicación
+  con la base vacía, que mezcla datos inventados con los de la persona usuaria
+  sin que los haya pedido; (d) sembrar siempre en el día de hoy, que haría que
+  pulsar el botón mirando el martes no cambiara nada en pantalla.
+- **Consecuencias**: esta entrada ajusta **el calendario** de D-016, que situaba
+  el sembrado en el paso 2 o 3; lo demás de D-016 sigue vigente y no se reescribe,
+  según la regla de este archivo de no tocar las entradas anteriores. El precio de
+  haberlo dejado para el final es el que D-016 anticipaba: las previsualizaciones
+  de los pasos 4, 4b y 5 se enseñaron vacías. Y sembrar dos veces no duplica nada,
+  porque los identificadores son fijos: el segundo sembrado reescribe el primero
+  y devuelve a la vida lo que estuviera retirado.

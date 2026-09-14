@@ -2,9 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { diaryRepository } from '@/data/repositories/diary';
 import { foodRepository } from '@/data/repositories/foods';
+import { seeder } from '@/data/seed';
 import type { MealEntry } from '@/domain/diary/meal-entry';
 import type { Food } from '@/domain/food/food';
-import type { FoodId } from '@/domain/identity/ids';
+import type { FoodId, MealEntryId } from '@/domain/identity/ids';
 import type { LocalDate } from '@/domain/time/local-date';
 
 /**
@@ -25,7 +26,9 @@ import type { LocalDate } from '@/domain/time/local-date';
  */
 export const dbKeys = {
   food: (id: FoodId) => ['db', 'food', id] as const,
+  meal: (id: MealEntryId) => ['db', 'meal', id] as const,
   mealsOn: (date: LocalDate) => ['db', 'meals', date] as const,
+  example: ['db', 'example'] as const,
 };
 
 /**
@@ -86,6 +89,97 @@ export function useSaveMeal() {
     mutationFn: (entry: MealEntry) => diaryRepository.saveMeal(entry),
     onSuccess: async (_result, entry) => {
       await client.invalidateQueries({ queryKey: dbKeys.mealsOn(entry.date) });
+    },
+    ...LOCAL,
+  });
+}
+
+/** Los registros vivos de un día, en el orden en que se escribieron. */
+export function useMealsOn(date: LocalDate) {
+  return useQuery({
+    queryKey: dbKeys.mealsOn(date),
+    queryFn: () => diaryRepository.mealsOn(date),
+    ...LOCAL,
+  });
+}
+
+/** Lo que puede pasar al abrir un registro concreto para editarlo. */
+export type MealEntryState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'missing' }
+  | { readonly kind: 'failed'; readonly error: unknown }
+  | { readonly kind: 'found'; readonly entry: MealEntry };
+
+/**
+ * Un registro por identificador.
+ *
+ * `missing` no es solo el enlace mal copiado: un registro borrado tiene lápida y
+ * el repositorio no lo devuelve (D-006, D-014), así que abrir la dirección de
+ * algo que se acaba de borrar cae aquí. Es correcto que así sea, y por eso el
+ * mensaje habla de las dos posibilidades.
+ */
+export function useMealEntry(id: MealEntryId): MealEntryState {
+  const { data, isPending, isError, error } = useQuery({
+    queryKey: dbKeys.meal(id),
+    queryFn: () => diaryRepository.mealById(id),
+    ...LOCAL,
+  });
+
+  if (isError) {
+    return { kind: 'failed', error };
+  }
+  if (isPending) {
+    return { kind: 'loading' };
+  }
+  return data === undefined ? { kind: 'missing' } : { kind: 'found', entry: data };
+}
+
+/**
+ * Borrar un registro, que es escribir su lápida (D-006).
+ *
+ * La fila no desaparece: se le pone fecha de borrado y deja de salir en las
+ * consultas. Para quien usa la aplicación el efecto es el mismo; la diferencia
+ * se cobrará en la fase 4, cuando sincronizar tenga que saber distinguir un
+ * registro que nunca llegó a un dispositivo de uno que allí se borró.
+ */
+export function useRemoveMeal(date: LocalDate) {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: MealEntryId) => diaryRepository.removeMeal(id),
+    onSuccess: async (_result, id) => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: dbKeys.mealsOn(date) }),
+        client.invalidateQueries({ queryKey: dbKeys.meal(id) }),
+      ]);
+    },
+    ...LOCAL,
+  });
+}
+
+/** Si el ejemplo está puesto, para saber qué botón ofrecer. */
+export function useExampleDataLoaded() {
+  return useQuery({ queryKey: dbKeys.example, queryFn: () => seeder.isLoaded(), ...LOCAL });
+}
+
+/**
+ * Poner o quitar los datos de ejemplo.
+ *
+ * Una sola mutación con un interruptor, y no dos, porque las dos hacen lo mismo
+ * después: invalidar el día y el estado del ejemplo. Separarlas repetiría esa
+ * cola dos veces.
+ */
+export function useExampleData(date: LocalDate) {
+  const client = useQueryClient();
+
+  return useMutation({
+    mutationFn: (action: 'load' | 'unload') =>
+      action === 'load' ? seeder.load(date) : seeder.unload(),
+    onSuccess: async () => {
+      await Promise.all([
+        client.invalidateQueries({ queryKey: dbKeys.mealsOn(date) }),
+        client.invalidateQueries({ queryKey: dbKeys.example }),
+      ]);
     },
     ...LOCAL,
   });

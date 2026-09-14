@@ -85,6 +85,21 @@ export const isEnergyGoalAllowed = (value: Kilocalories, sex: Sex = 'unspecified
  *
  * Devuelve `undefined` si no hay ninguna versión anterior a esa fecha, que es lo
  * que ocurre al mirar un día previo a la creación del perfil.
+ *
+ * ## El desempate por `updatedAt`, y por qué hace falta
+ *
+ * Editar los objetivos dos veces el mismo día crea dos versiones con el mismo
+ * `effectiveFrom`, porque D-004 no versiona por instante, versiona por día. Sin
+ * un segundo criterio de orden, el resultado ante un empate depende de en qué
+ * orden `Array.prototype.sort` recibiera las dos filas, y eso a su vez depende
+ * del orden en que Dexie las devuelve, que no es un contrato: puede ser el de
+ * inserción hoy y dejar de serlo mañana. Quien edita un objetivo dos veces
+ * seguidas espera que gane la segunda edición, no una casualidad del
+ * almacenamiento.
+ *
+ * `localeCompare` funciona aquí porque `effectiveFrom` (YYYY-MM-DD) y
+ * `updatedAt` (ISO 8601) son los dos formatos donde el orden alfabético
+ * coincide con el orden cronológico.
  */
 export function goalsEffectiveOn(
   versions: readonly DailyGoals[],
@@ -92,6 +107,9 @@ export function goalsEffectiveOn(
 ): DailyGoals | undefined {
   return versions
     .filter((goals) => goals.deletedAt === undefined && goals.effectiveFrom <= date)
-    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
+    .sort(
+      (a, b) =>
+        b.effectiveFrom.localeCompare(a.effectiveFrom) || b.updatedAt.localeCompare(a.updatedAt),
+    )
     .at(0);
 }

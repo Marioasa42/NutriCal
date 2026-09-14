@@ -1,6 +1,9 @@
 import type { DayTotals } from '@/domain/diary/day';
 import { labelOf } from '@/domain/nutrition/micronutrients';
-import { buildMicronutrientPanel, type MicronutrientRow } from '@/domain/nutrition/micronutrient-panel';
+import {
+  buildMicronutrientPanel,
+  type MicronutrientRow,
+} from '@/domain/nutrition/micronutrient-panel';
 import type { LocalDate } from '@/domain/time/local-date';
 import { useGoalsQuery } from '@/features/goals/queries';
 import { useProfile } from '@/features/profile/profile-context';
@@ -95,8 +98,16 @@ export function MicronutrientPanel({
 }
 
 function MicronutrientBar({ row }: { row: Extract<MicronutrientRow, { kind: 'known' }> }) {
-  const { id, amount, unknownCount, totalEntries, target, targetSource, upperLimit, percentOfTarget } =
-    row;
+  const {
+    id,
+    amount,
+    unknownCount,
+    totalEntries,
+    target,
+    targetSource,
+    upperLimit,
+    percentOfTarget,
+  } = row;
 
   // La barra nunca se sale del contenedor, aunque el día vaya muy por encima
   // del objetivo: un 340% de ancho rompería el diseño. La cifra de al lado sí

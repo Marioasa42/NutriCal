@@ -167,6 +167,89 @@ export function createMealEntry(
 }
 
 /**
+ * Cambiar el momento del día o la cantidad de un registro que ya existe.
+ *
+ * **No vuelve a consultar la fuente**, y esa es toda la decisión: la instantánea
+ * que se guardó al registrar se reutiliza tal cual. Volver a pedir el producto
+ * a Open Food Facts para corregir una cantidad significaría que cambiar "150 g"
+ * por "160 g" pudiera cambiar también las calorías, porque la fuente hubiera
+ * corregido su ficha entre medias. Eso es exactamente lo que D-003 existe para
+ * impedir: el historial es tuyo y no se mueve solo. Editar la cantidad edita la
+ * cantidad.
+ *
+ * Se conservan el identificador, el día y `createdAt`; solo cambian la porción,
+ * el momento y `updatedAt`, que para la sincronización de la fase 4 es lo que
+ * ordena los cambios.
+ *
+ * Devuelve el mismo tipo que `createMealEntry` a propósito: el formulario recibe
+ * una función que construye un registro y no necesita saber si está creando o
+ * corrigiendo.
+ */
+export function reviseMealEntry(
+  entry: MealEntry,
+  change: { readonly slot: MealSlot; readonly choice: PortionChoice },
+  context: Pick<LogMealContext, 'now'> = defaultLogMealContext,
+): MealEntryCreation {
+  const { slot, choice } = change;
+
+  if (choice.kind === 'baseUnit' && !isUsableAmount(choice.amount)) {
+    return { kind: 'invalidAmount', amount: choice.amount };
+  }
+
+  const common = { id: entry.id, date: entry.date, slot, createdAt: entry.createdAt };
+  const updatedAt = context.now();
+
+  // Se estrecha por la instantánea, que es la que manda ahora: el alimento del
+  // catálogo podría incluso haberse borrado, y el registro tiene que seguir
+  // siendo editable sin él.
+  if (entry.food.baseUnit === 'ml') {
+    const selection: PortionSelection<Milliliters> =
+      choice.kind === 'baseUnit'
+        ? { kind: 'baseUnit', amount: milliliters(choice.amount) }
+        : { kind: 'serving', servingId: choice.servingId, count: choice.count };
+
+    const resolution = resolvePortion(entry.food.servings, selection);
+    if (resolution.kind !== 'resolved') {
+      return resolution;
+    }
+
+    return {
+      kind: 'created',
+      entry: { ...common, updatedAt, food: entry.food, portion: resolution.portion },
+    };
+  }
+
+  const selection: PortionSelection<Grams> =
+    choice.kind === 'baseUnit'
+      ? { kind: 'baseUnit', amount: grams(choice.amount) }
+      : { kind: 'serving', servingId: choice.servingId, count: choice.count };
+
+  const resolution = resolvePortion(entry.food.servings, selection);
+  if (resolution.kind !== 'resolved') {
+    return resolution;
+  }
+
+  return {
+    kind: 'created',
+    entry: { ...common, updatedAt, food: entry.food, portion: resolution.portion },
+  };
+}
+
+/**
+ * Lo que eligió quien registró, tal cual, para volver a enseñarlo al editar.
+ *
+ * `ResolvedPortion` guarda la elección además de su equivalencia justamente para
+ * esto: si solo tuviéramos los gramos, editar "media ración" enseñaría "91 g" y
+ * la persona perdería su propia forma de contar.
+ */
+export function choiceOf(entry: MealEntry): PortionChoice {
+  const { selection } = entry.portion;
+  return selection.kind === 'baseUnit'
+    ? { kind: 'baseUnit', amount: selection.amount }
+    : { kind: 'serving', servingId: selection.servingId, count: selection.count };
+}
+
+/**
  * La cantidad que hay que enseñar por defecto en el formulario.
  *
  * Cien unidades base, que es la cantidad de referencia del perfil (D-003): así

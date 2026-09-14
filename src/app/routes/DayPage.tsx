@@ -3,18 +3,18 @@ import { Link, useParams } from 'react-router';
 
 import { InvalidDate } from '@/app/routes/InvalidDate';
 import { addDays, today, tryLocalDate, type LocalDate } from '@/domain/time/local-date';
+import { DayDiary } from '@/features/diary/DayDiary';
+import { ExampleDataPanel } from '@/features/diary/ExampleDataPanel';
 import { formatLocalDate, formatLocalDateShort } from '@/shared/lib/format-date';
 import { currentTimeZone } from '@/shared/lib/time-zone';
 
 /**
- * El diario de un día. De momento el marco: la fecha, la navegación entre días y
- * la entrada a la búsqueda. Registrar ya funciona y escribe en Dexie; enseñar
- * la lista del día y sus totales llega en el paso siguiente.
+ * El diario de un día: la fecha, la navegación entre días y lo registrado.
  *
- * Lo que sí está terminado es la relación entre la URL y el día, que es la parte
- * que D-010 quería tener resuelta pronto: el día vive en la ruta, así que el
- * botón de atrás recorre los días visitados y una fecha concreta se puede
- * guardar en marcadores.
+ * Esta pantalla vive en `app/routes` y no en `features/diary` porque es una
+ * pantalla de marco: lo suyo es la relación entre la URL y el día (D-010, D-027).
+ * Lo que hay dentro del día lo pone la funcionalidad, en `DayDiary`, y así esta
+ * pantalla no crece cada vez que el diario aprenda a enseñar algo nuevo.
  */
 export function DayPage() {
   const { date: rawDate } = useParams<{ date: string }>();
@@ -53,18 +53,9 @@ function Day({ date }: { date: LocalDate }) {
         {isToday ? <p className="text-sm text-slate-500">Hoy</p> : null}
       </header>
 
-      <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-slate-300 p-6 text-center">
-        <p className="text-slate-500">
-          Lo que añadas se guarda en este dispositivo. La lista del día y los totales llegan en el
-          paso siguiente.
-        </p>
-        <Link
-          to={`/dia/${date}/buscar`}
-          className="rounded-md bg-emerald-700 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-800"
-        >
-          Buscar un alimento
-        </Link>
-      </div>
+      <DayDiary date={date} />
+
+      <ExampleDataPanel date={date} />
     </div>
   );
 }

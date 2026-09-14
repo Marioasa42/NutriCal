@@ -4,6 +4,7 @@ import { DayPage } from '@/app/routes/DayPage';
 import { NotFoundPage } from '@/app/routes/NotFoundPage';
 import { RootLayout } from '@/app/routes/RootLayout';
 import { TodayRedirect } from '@/app/routes/TodayRedirect';
+import { EditEntryPage } from '@/features/diary/EditEntryPage';
 import { LogEntryPage } from '@/features/diary/LogEntryPage';
 import { BarcodePage } from '@/features/food-search/BarcodePage';
 import { SearchPage } from '@/features/food-search/SearchPage';
@@ -34,6 +35,9 @@ export const router = createBrowserRouter([
       // barras viaja en la URL (D-032): quien lo produce no tiene que saber qué
       // pasa después.
       { path: 'dia/:date/registrar/:foodId', Component: LogEntryPage },
+      // Editar uno que ya existe. "Registrar" es el verbo y "registro" el
+      // sustantivo: una crea y la otra corrige algo que ya está escrito.
+      { path: 'dia/:date/registro/:entryId', Component: EditEntryPage },
       { path: '*', Component: NotFoundPage },
     ],
   },

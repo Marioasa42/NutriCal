@@ -7,7 +7,7 @@ import {
 } from '@/domain/diary/log-meal';
 import { MEAL_SLOTS, type MealEntry, type MealSlot } from '@/domain/diary/meal-entry';
 import { entryTotals } from '@/domain/diary/totals';
-import { isUserFilled, type Food } from '@/domain/food/food';
+import { isUserFilled, type MassFood, type VolumeFood } from '@/domain/food/food';
 import type { ServingId } from '@/domain/identity/ids';
 import { OPTIONAL_MACRO_KEYS } from '@/domain/nutrition/macros';
 import { useSaveMeal } from '@/features/diary/queries';
@@ -37,8 +37,24 @@ import { NutrientValue } from '@/shared/ui/NutrientValue';
  * registro existente pasará otra, sin tocar nada de esta pantalla.
  */
 
+/**
+ * Lo único que el formulario necesita saber del alimento: en qué unidad se mide
+ * y qué porciones tiene.
+ *
+ * Se escribe como unión de dos `Pick` en vez de `Pick<Food, ...>` por un motivo
+ * concreto: `Pick` sobre una unión junta los tipos de cada propiedad por
+ * separado y admitiría un alimento con unidad base en gramos y porciones en
+ * mililitros, que es justo la mezcla que D-005 existe para impedir. Con la
+ * unión escrita a mano, el emparejamiento se conserva.
+ *
+ * Lo cumplen tanto un `Food` del catálogo como la instantánea guardada dentro de
+ * un registro, y por eso el mismo formulario sirve para registrar y para editar.
+ */
+export type PortionableFood =
+  Pick<MassFood, 'baseUnit' | 'servings'> | Pick<VolumeFood, 'baseUnit' | 'servings'>;
+
 export interface EntryFormProps {
-  readonly food: Food;
+  readonly food: PortionableFood;
   readonly initialSlot?: MealSlot;
   readonly initialChoice?: PortionChoice;
   readonly submitLabel: string;
@@ -223,7 +239,7 @@ export function EntryForm({
  * Las tres ramas de fallo vienen del dominio con su dato dentro, así que el
  * mensaje puede ser concreto en lugar de un "revisa los campos" genérico.
  */
-function Preview({ built, food }: { built: MealEntryCreation; food: Food }) {
+function Preview({ built, food }: { built: MealEntryCreation; food: PortionableFood }) {
   if (built.kind === 'invalidAmount') {
     return <PreviewNote>Escribe cuánto vas a registrar, en {food.baseUnit}.</PreviewNote>;
   }

@@ -11,9 +11,19 @@ de crear una cuenta. Los objetivos diarios son totalmente editables.
 
 ## Estado
 
-Fase 0 completada: preparación del proyecto, tipos del dominio y verificación
-automática. Todavía no hay funcionalidad de usuario. El plan por fases está en
-`CLAUDE.md` y las decisiones técnicas en `DECISIONS.md`.
+Fase 1 completada: ya se puede buscar un alimento en Open Food Facts por nombre
+o por código de barras, registrarlo en un día con su porción, editarlo, borrarlo
+y ver los totales del día en calorías y macronutrientes. Todo se guarda en el
+propio dispositivo, sin cuenta y sin servidor.
+
+Los micronutrientes, los objetivos editables y el funcionamiento sin conexión
+llegan en las fases 2 y 3. El plan por fases está en `CLAUDE.md` y las
+decisiones técnicas, con sus alternativas descartadas, en `DECISIONS.md`.
+
+Hay un botón para cargar datos de ejemplo en cualquier día, porque cada
+previsualización vive en su propio origen y arranca con la base de datos vacía.
+Los datos de ejemplo se cargan y se borran a mano: nunca se mezclan con los
+tuyos sin que lo pidas.
 
 ## Puesta en marcha
 
@@ -79,6 +89,8 @@ src/
     persistence/   Campos comunes de toda entidad guardada, incluida la lápida.
     transfer/      Formato del archivo de exportación.
   features/      Un caso de uso por carpeta, con su interfaz, su estado y sus datos.
+    food-search/   Buscar por nombre o por código, y completar lo que la fuente no aporta.
+    diary/         Registrar, editar y borrar, y los totales del día.
   data/          Dexie y repositorios. Envuelve y desenvuelve las entidades.
   shared/        Lo que no tiene un dueño claro: componentes y utilidades comunes.
   app/           Arranque, rutas, providers y layout.
@@ -86,7 +98,14 @@ src/
 api/             Funciones serverless de Vercel. Proyecto de TypeScript aparte.
   _lib/          Lógica probable: URLs, caché, límite de ritmo, handlers.
   off/           Rutas públicas: búsqueda y producto de Open Food Facts.
+
+contracts/       Las reglas que el navegador y el servidor cumplen igual, una sola vez.
 ```
+
+`contracts/` no es un cajón de utilidades compartidas: solo entra aquí lo que,
+si se separase en dos copias, rompería el trato entre las dos puntas. Hoy son
+dos archivos, la validación del código de barras y la normalización del texto de
+búsqueda. Ver `DECISIONS.md`, entradas D-031 y D-033.
 
 La carpeta `api` no importa nada de `src`. Es otro desplegable, con otro entorno
 de ejecución y su propio `tsconfig`. El intermediario existe porque Open Food

@@ -1653,3 +1653,64 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   con esa información exacta (`Persisted.updatedAt`) y añadir un segundo sería
   la misma trampa de dos fuentes de verdad que D-014 evita con los campos
   derivados de almacenamiento.
+
+---
+
+## D-050 El panel de micronutrientes: barras hechas a mano, D-026 por construcción, y objetivo con dos niveles de respaldo
+- **Fecha**: 2026-09-14
+- **Fase**: 2
+- **Estado**: aceptada
+- **Contexto**: con el cliente de USDA (D-048) y los objetivos editables
+  (D-049) ya en pie, tocaba la pieza que los une: enseñar, para cada uno de los
+  veintidós micronutrientes, cuánto se lleva hoy frente a un objetivo, tal
+  como pedía el plan de la fase 2 (decisiones 12 y 13, aprobadas de antemano).
+  Dos preguntas quedaban abiertas al escribir el código: con qué se dibuja una
+  barra de progreso, y qué objetivo usa cada barra cuando `DailyGoals.micros`
+  está vacío, que es el caso normal porque ninguna pantalla lo rellena
+  todavía.
+- **Decisión**:
+  1. **Barras propias, no Recharts** (decisión 12). Una barra de progreso hacia
+     un objetivo es un `div` con un ancho en porcentaje, no una serie de datos.
+  2. **`MicronutrientRow`** (`domain/nutrition/micronutrient-panel.ts`) es una
+     unión discriminada de dos ramas, `noData` y `known`, y solo la segunda
+     lleva objetivo, porcentaje y recuento de `unknown`. No existe ningún
+     camino para construir una barra sin esos tres datos juntos: D-026 queda
+     garantizado por el compilador, no por que nadie se acuerde de pasarlos.
+     `NutrientValue.tsx` exporta ahora `UnknownNote`, que ya existía para las
+     macros opcionales, y el panel la reutiliza tal cual en vez de copiarla.
+  3. **Objetivo con dos niveles** (decisión 13): `goals.micros[id]` si existe,
+     y si no, la referencia oficial de `reference-intakes.ts` según el sexo
+     del perfil. `DailyGoals` entero puede no existir todavía (perfil recién
+     creado, D-049 no lo crea por defecto), y se trata exactamente igual que
+     si existiera con `micros: {}`: los dos casos caen a la referencia. Para
+     eso, `DaySummary.goals` (`domain/diary/day.ts`) pasa a ser opcional; no
+     tenía ningún consumidor todavía, así que corregirlo no toca ninguna
+     decisión ya construida encima.
+  4. El fallo de leer los objetivos (Dexie caído) tampoco bloquea el panel:
+     `useGoalsQuery` en curso, en error, o sin ninguna versión, son las tres
+     la misma señal para `buildMicronutrientPanel`, que ya sabe qué hacer.
+- **Por qué**: D-026 ya avisó, en sus propias consecuencias, de que "ninguna
+  barra puede dibujarse sin su recuento" y de que hacía falta un componente
+  compartido para sostenerlo; esto es exactamente eso, aplicado con un tipo en
+  vez de con una convención. Traer Recharts para veintidós barras habría sido
+  la dependencia que CLAUDE.md pide justificar sin que aporte nada sobre un
+  `div` con estilo, y habría dejado la garantía de D-026 en manos de configurar
+  bien una librería externa en vez de en el propio tipo. Bloquear el panel
+  entero porque falle la lectura de un dato que ya tiene una alternativa
+  perfectamente válida (la referencia oficial) sería peor que degradarse con
+  elegancia.
+- **Alternativa descartada**: (a) Recharts con una barra por gráfica, descrito
+  arriba; (b) ocultar del todo un micronutriente sin datos hoy, que es la
+  opción que D-026 ya rechazó para las macros opcionales por dejar casi todo
+  en blanco cuando la fuente no trae el panel completo; (c) exigir que
+  `DailyGoals` exista siempre y crear una versión con valores por defecto al
+  arrancar el perfil, como `ensureProfile`, descartado porque el valor por
+  defecto de una macro sí sería inventar una cifra con aspecto de decisión de
+  la persona usuaria, que es justo lo que D-001 prohíbe y `createProfile` evita
+  dejando el cuerpo fuera hasta que haga falta.
+- **Consecuencias**: queda pendiente de mi revisión que los micronutrientes sin
+  dato se agrupen en un desplegable en vez de enseñarse como veintidós barras
+  vacías; es la elección conservadora mientras no se decida lo contrario, no
+  una decisión ya cerrada. Sin pantalla propia todavía: no hay ninguna forma de
+  fijar un objetivo por micronutriente desde la interfaz, así que
+  `targetSource` vale siempre `'reference'` en la práctica hasta que exista una.

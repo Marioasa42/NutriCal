@@ -911,3 +911,43 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   registrar por qué. El dígito de control no se comprueba y el motivo está en
   `contracts/barcode.ts`: el rango cubre esquemas que no lo calculan igual, y
   Open Food Facts contiene códigos internos de tienda que no cumplen ninguno.
+
+## D-033 `normalizeForSearch` se muda a `contracts/` y el test de contraste desaparece
+- **Fecha**: 2026-09-14
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: D-031 creó `contracts/` con el código de barras dentro y dejó
+  `normalizeForSearch` duplicada a propósito, para que si la vista previa de
+  Vercel fallaba con la importación relativa que sale de `api/`, fallara por una
+  sola cosa. La vista previa construyó y el pull request se fusionó, así que el
+  patrón está verificado y la duplicación ya no compra nada.
+- **Decisión**: la función vive en `contracts/text.ts`. `api/_lib/text.ts` se
+  borra y las funciones serverless la importan con ruta relativa y extensión
+  `.js`; el navegador la importa con el alias `@contracts/text` en los cuatro
+  sitios que la usaban, sin reexportarla desde `src/shared/lib/text.ts`. El test
+  que comparaba las dos implementaciones se borra, y sus casos se mudan a
+  `contracts/text.test.ts` junto a la función. En su lugar queda un test corto
+  que comprueba que `normalizeQuery` sigue siendo la del contrato y no una
+  variante local.
+- **Por qué**: pasa la prueba de admisión que D-031 escribió para esta carpeta.
+  Si las dos copias se separasen, el navegador construiría la clave de su caché
+  de consultas con una normalización y la función serverless construiría la URL
+  saliente, que es la clave de la caché de la red de distribución, con otra. Las
+  dos cachés están pensadas para acertar a la vez ante "Plátano" y "platano"
+  (D-013), y ese acuerdo es justo lo que `contracts/` protege. De regalo,
+  desaparece el único punto donde el proyecto de la API miraba dentro de `src/`,
+  que era el `import` del test de contraste.
+- **Alternativa descartada**: (a) mantener las dos copias con su test, que es lo
+  que D-031 ya decidió sustituir en cuanto el patrón estuviera verificado, y que
+  paga con un test permanente lo que aquí cuesta un archivo; (b) reexportar la
+  función desde `src/shared/lib/text.ts` para no tocar los cuatro importadores,
+  que deja dos nombres para la misma cosa y esconde que es un contrato
+  compartido justo a quien lee el código del navegador.
+- **Consecuencias**: `MIN_SEARCH_LENGTH` y `MIN_QUERY_LENGTH` se quedan cada uno
+  en su lado, y esto es deliberado aunque hoy los dos valgan tres. Se parecen a
+  un contrato y no lo son: el del navegador decide cuándo merece la pena salir a
+  la red y puede subir sin romper nada, porque pedir menos de lo permitido
+  siempre le vale al servidor; el del servidor es el límite que de verdad se
+  aplica. Son dos reglas con el mismo número, no una regla en dos sitios.
+  `contracts/` queda con dos habitantes y la prueba de admisión de D-031 sigue
+  siendo la única puerta de entrada.

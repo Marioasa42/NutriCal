@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-// Único punto donde el proyecto de la API mira dentro del frontend, y es un
-// test: sirve precisamente para vigilar que las dos copias no se separen.
-import { normalizeForSearch as normalizeInApp } from '../../src/shared/lib/text.js';
+import { normalizeForSearch } from '../../contracts/text.js';
 import { USER_AGENT, buildProductUrl, buildSearchUrl, normalizeQuery, parsePage } from './off.js';
-import { normalizeForSearch as normalizeInApi } from './text.js';
 
 describe('identificación ante Open Food Facts', () => {
   it('declara nombre, versión y contacto', () => {
@@ -64,22 +61,14 @@ describe('página pedida', () => {
   });
 });
 
-describe('paridad con la normalización del navegador', () => {
-  it('las dos implementaciones coinciden', () => {
-    // La función serverless no importa código de `src` a propósito: es otro
-    // proyecto y otro entorno. Este test evita que las dos copias se separen.
-    const cases = [
-      '  LECHE Semidesnatada ',
-      'Plátano de Canarias',
-      'yogur   natural',
-      'Piña',
-      'Melocotón en almíbar',
-      '',
-    ];
-
-    for (const value of cases) {
-      expect(normalizeInApi(value), value).toBe(normalizeInApp(value));
-      expect(normalizeQuery(value), value).toBe(normalizeInApp(value));
+describe('normalización de la consulta', () => {
+  it('es exactamente la del contrato compartido', () => {
+    // Ya no hay dos implementaciones que comparar: hay una, en `contracts/`, y
+    // `normalizeQuery` es el nombre con el que esta capa la usa. Lo que este
+    // test vigila es que siga siendo esa y no una variante local, porque la
+    // clave de caché de la red de distribución depende de ello (D-033).
+    for (const value of ['  LECHE Semidesnatada ', 'Plátano de Canarias', 'Piña', '']) {
+      expect(normalizeQuery(value), value).toBe(normalizeForSearch(value));
     }
   });
 });

@@ -912,108 +912,42 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   `contracts/barcode.ts`: el rango cubre esquemas que no lo calculan igual, y
   Open Food Facts contiene códigos internos de tienda que no cumplen ninguno.
 
-## D-034 Registrar es una ruta, y el alimento llega por identificador porque la búsqueda ya lo ha guardado
+## D-033 `normalizeForSearch` se muda a `contracts/` y el test de contraste desaparece
 - **Fecha**: 2026-09-14
 - **Fase**: 1
 - **Estado**: aceptada
-- **Contexto**: para registrar una comida hace falta llevar un alimento desde la
-  pantalla de resultados hasta un formulario. Lo primero que apetece es un botón
-  que abra un diálogo con el alimento en memoria, o un botón que escriba en
-  Dexie y luego navegue.
-- **Decisión**: registrar es la pantalla `/dia/:date/registrar/:foodId`, y lo
-  único que viaja es el identificador. Para que ese identificador exista
-  siempre, la búsqueda guarda en el catálogo local todo lo que trae, que es lo
-  que D-013 ya decía y hasta ahora no se había implementado. El repositorio gana
-  `adopt`, que devuelve el alimento que hay que usar: si ese código de barras ya
-  estaba, devuelve el guardado y **no lo pisa**. Las tarjetas de resultado
-  reciben su acción por un hueco (`action`), así que la misma tarjeta sirve en
-  la búsqueda y en la pantalla de un código de barras.
-- **Por qué**: son tres problemas resueltos por el mismo sitio. El primero es el
-  de D-032: quien produce un alimento no debe saber qué pasa después, y con una
-  dirección la pantalla se recarga y se comparte. El segundo es la dirección de
-  las dependencias de D-027: si la acción fuera un botón que escribe y navega,
-  la funcionalidad de búsqueda tendría que importar código de la del diario;
-  siendo un enlace, solo produce una URL y nadie importa a nadie. El tercero es
-  que `adopt` no sobrescriba: la normalización genera un identificador nuevo en
-  cada llamada, así que sin esto el mismo yogur buscado dos veces serían dos
-  filas, y además la copia guardada puede llevar cifras completadas a mano que
-  la recién traída nunca lleva.
-- **Alternativa descartada**: (a) un diálogo con el alimento en memoria, que no
-  tiene dirección, se pierde al recargar y ata la pantalla de destino al estado
-  de la de origen; (b) botón que adopta al pulsar, que obliga al cruce entre
-  funcionalidades descrito arriba; (c) pasar el alimento por el estado del
-  router, que no sobrevive a recargar y deja la pantalla sin nada que enseñar;
-  (d) que `adopt` sobrescriba siempre, más simple y que tira sin avisar el
-  trabajo de quien completó un producto a mano.
-- **Consecuencias**: cada búsqueda escribe sus resultados en IndexedDB. Es lo
-  que D-013 pedía y lo que habilitará buscar primero en local, pero si esa
-  escritura falla no puede tumbar una búsqueda que ha ido bien: se devuelve la
-  página sin adoptar y el enlace de añadir acaba en la rama "ese alimento no
-  está en tu catálogo", que la pantalla de destino ya explica. Y la vista previa
-  del formulario es literalmente el registro que se va a guardar, construido con
-  la misma función; por eso `build` llega como propiedad, de modo que editar un
-  registro pueda pasar otra sin tocar el formulario.
-
-## D-035 La marca de un total incompleto es "sobre N de M registros", y la estimación es una insignia
-- **Fecha**: 2026-09-14
-- **Fase**: 1
-- **Estado**: pendiente de revisión
-- **Contexto**: D-026 fijó que una cifra con `unknown` mayor que cero nunca se
-  enseña sola, y dejó escrito a propósito que la forma concreta de la marca se
-  decidía aparte. Hacía falta elegirla para poder pintar la primera cifra.
-- **Decisión**: existe `shared/ui/NutrientValue`, el único componente que enseña
-  la cifra de un nutriente. Lleva dos marcas distintas: `unknown` se escribe como
-  "sobre N de M registros" junto al número, y `estimated` como una insignia con
-  el texto "estimación", para las cifras que rellenó a mano la persona usuaria
-  (D-002). Un `unknown` de cero no se enseña.
-- **Por qué**: de las tres formas que D-026 mencionaba, esta es la que se
-  entiende sin aprender nada y no depende de que nadie pase el ratón por encima
-  ni despliegue un detalle, que era justo lo que esa decisión descartaba. Que
-  las dos marcas vivan en el mismo componente es lo que hace cumplible la regla:
-  una pantalla nueva no puede olvidarse de ponerlas porque no son cosa suya.
-  Enseñar "sobre 5 de 5" cuando no falta nada sería ruido, y el ruido enseña a
-  ignorar la marca justo cuando sí importa.
-- **Alternativa descartada**: (a) un signo junto a la cifra, tipo asterisco, que
-  ocupa menos y obliga a buscar la leyenda; (b) el recuento solo en un detalle
-  desplegable, que D-026 ya descartó porque engaña a quien no despliega; (c) dos
-  componentes distintos, uno para el recuento y otro para la estimación, que
-  reparte en dos sitios una regla que hay que cumplir siempre.
-- **Nota**: queda marcada como pendiente de revisión porque es una decisión de
-  presentación tomada sobre la marcha para no bloquear el paso 5. Cierra el
-  pendiente que D-026 dejó abierto, pero el texto y la forma son revisables sin
-  tocar nada más que este componente.
-
-## D-036 TanStack Query también para lo local, con `networkMode: 'always'`, y sin React Hook Form todavía
-- **Fecha**: 2026-09-14
-- **Fase**: 1
-- **Estado**: aceptada
-- **Contexto**: la pantalla de registro lee un alimento de IndexedDB y escribe un
-  registro. Hacía falta decidir con qué se hace eso, porque CLAUDE.md reserva
-  TanStack Query para "datos del servidor" y el stack menciona React Hook Form
-  para formularios.
-- **Decisión**: las lecturas y escrituras de Dexie usan TanStack Query, con
-  claves que empiezan por `db` para distinguirlas de las de `off`, y **siempre**
-  con `networkMode: 'always'`. Los formularios de la fase 1 se hacen con
-  `useState`; React Hook Form no se instala todavía.
-- **Por qué**: lo que hace falta para una lectura local es lo mismo que para una
-  remota: estados de carga y error, una caché compartida entre pantallas y una
-  forma de decir "esto ha cambiado" tras escribir. Añadir `dexie-react-hooks`
-  sería una dependencia más y dos modelos mentales en la misma aplicación, y
-  hacerlo con `useEffect` significa escribir a mano el cargando, el error y la
-  invalidación en cada pantalla. Lo de `networkMode` no es un detalle de
-  configuración: por defecto TanStack Query no intenta siquiera una consulta
-  cuando el navegador dice que no hay red, cosa correcta para Open Food Facts
-  (D-029) y absurda para IndexedDB. Sin esa línea, el diario se quedaría en
-  blanco en el metro con los datos dentro del propio dispositivo, que es
-  exactamente lo contrario de la decisión 5 del proyecto.
-- **Alternativa descartada**: (a) `dexie-react-hooks`, que da reactividad viva
-  sobre las consultas y es realmente cómodo, pero es una dependencia nueva para
-  un problema que la que ya está resuelve; (b) `useEffect` con `useState`, sin
-  dependencias y con los estados a mano en cada pantalla; (c) instalar React
-  Hook Form ahora, que para un formulario de tres campos añade una biblioteca
-  que habría que defender sin que resuelva nada que duela hoy.
-- **Consecuencias**: toda consulta o mutación contra Dexie tiene que llevar
-  `networkMode: 'always'`. Es fácil de olvidar y no falla en desarrollo, donde
-  siempre hay red; si aparece una tercera, conviene un ayudante que lo ponga por
-  defecto. React Hook Form se reconsidera en la fase 2, con el editor de
-  objetivos, que sí tiene bastantes campos y validación cruzada.
+- **Contexto**: D-031 creó `contracts/` con el código de barras dentro y dejó
+  `normalizeForSearch` duplicada a propósito, para que si la vista previa de
+  Vercel fallaba con la importación relativa que sale de `api/`, fallara por una
+  sola cosa. La vista previa construyó y el pull request se fusionó, así que el
+  patrón está verificado y la duplicación ya no compra nada.
+- **Decisión**: la función vive en `contracts/text.ts`. `api/_lib/text.ts` se
+  borra y las funciones serverless la importan con ruta relativa y extensión
+  `.js`; el navegador la importa con el alias `@contracts/text` en los cuatro
+  sitios que la usaban, sin reexportarla desde `src/shared/lib/text.ts`. El test
+  que comparaba las dos implementaciones se borra, y sus casos se mudan a
+  `contracts/text.test.ts` junto a la función. En su lugar queda un test corto
+  que comprueba que `normalizeQuery` sigue siendo la del contrato y no una
+  variante local.
+- **Por qué**: pasa la prueba de admisión que D-031 escribió para esta carpeta.
+  Si las dos copias se separasen, el navegador construiría la clave de su caché
+  de consultas con una normalización y la función serverless construiría la URL
+  saliente, que es la clave de la caché de la red de distribución, con otra. Las
+  dos cachés están pensadas para acertar a la vez ante "Plátano" y "platano"
+  (D-013), y ese acuerdo es justo lo que `contracts/` protege. De regalo,
+  desaparece el único punto donde el proyecto de la API miraba dentro de `src/`,
+  que era el `import` del test de contraste.
+- **Alternativa descartada**: (a) mantener las dos copias con su test, que es lo
+  que D-031 ya decidió sustituir en cuanto el patrón estuviera verificado, y que
+  paga con un test permanente lo que aquí cuesta un archivo; (b) reexportar la
+  función desde `src/shared/lib/text.ts` para no tocar los cuatro importadores,
+  que deja dos nombres para la misma cosa y esconde que es un contrato
+  compartido justo a quien lee el código del navegador.
+- **Consecuencias**: `MIN_SEARCH_LENGTH` y `MIN_QUERY_LENGTH` se quedan cada uno
+  en su lado, y esto es deliberado aunque hoy los dos valgan tres. Se parecen a
+  un contrato y no lo son: el del navegador decide cuándo merece la pena salir a
+  la red y puede subir sin romper nada, porque pedir menos de lo permitido
+  siempre le vale al servidor; el del servidor es el límite que de verdad se
+  aplica. Son dos reglas con el mismo número, no una regla en dos sitios.
+  `contracts/` queda con dos habitantes y la prueba de admisión de D-031 sigue
+  siendo la única puerta de entrada.

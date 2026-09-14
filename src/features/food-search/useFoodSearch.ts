@@ -2,7 +2,8 @@ import { useQuery, type FetchStatus } from '@tanstack/react-query';
 
 import { adoptSearchResults } from '@/features/food-search/adopt-results';
 import { searchFoods, type FoodSearchPage } from '@/services/off';
-import { isSearchable, normalizeForSearch } from '@/shared/lib/text';
+import { isSearchable } from '@/shared/lib/text';
+import { normalizeForSearch } from '@contracts/text';
 
 /**
  * La búsqueda de alimentos, con sus estados.

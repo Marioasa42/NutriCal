@@ -4,7 +4,7 @@ import { asDeleted } from '@/data/tombstone';
 import type { Food } from '@/domain/food/food';
 import type { FoodId } from '@/domain/identity/ids';
 import { now, type Instant } from '@/domain/time/local-date';
-import { normalizeForSearch } from '@/shared/lib/text';
+import { normalizeForSearch } from '@contracts/text';
 
 /**
  * Catálogo local de alimentos.

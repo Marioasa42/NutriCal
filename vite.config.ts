@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 /**
  * `npm run dev` sirve el frontend y NADA MÁS: Vite no ejecuta `api/`, así que
@@ -140,6 +141,48 @@ function localApiFunctions(): Plugin {
   };
 }
 
+/**
+ * El service worker cachea solo el *app shell* (JS, CSS, HTML, iconos): lo que
+ * hace falta para que la aplicación cargue sin red. No cachea `/api/off` ni
+ * `/api/usda` a propósito. Buscar un producto nuevo sin conexión no tiene
+ * sentido -no hay nada que buscar-, y las dos búsquedas ya saben mostrar un
+ * estado "sin conexión" propio (`fetchStatus === 'paused'` de TanStack Query,
+ * en `useFoodSearch.ts` y `useUsdaFoodSearch.ts`): lo que faltaba para verlo
+ * era que la página en sí cargara offline, no que la API respondiera offline.
+ *
+ * `navigateFallback` (activado por defecto en el modo `generateSW`) hace que
+ * cualquier ruta de la SPA -`/dia/:date`, `/ajustes`, etc.- sirva
+ * `index.html` cuando no hay red, sin tener que enumerar aquí el árbol de
+ * `src/app/router.tsx`. `navigateFallbackDenylist` excluye `/api/.*`
+ * explícitamente: sin esto, una petición a `/api/off/search` sin conexión
+ * recibiría el HTML de la aplicación en vez de fallar como una petición de
+ * red normal, y esa respuesta no sería un JSON válido - rompería la
+ * detección de "sin conexión" en vez de activarla.
+ */
+function pwaPlugin(): Plugin[] {
+  return VitePWA({
+    registerType: 'autoUpdate',
+    workbox: {
+      navigateFallbackDenylist: [/^\/api\//],
+    },
+    manifest: {
+      name: 'NutriCal',
+      short_name: 'NutriCal',
+      description:
+        'Registro de comidas, ejercicio, calorías, macronutrientes y micronutrientes. Sin cuenta y sin conexión.',
+      lang: 'es',
+      start_url: '/',
+      display: 'standalone',
+      background_color: '#f8fafc',
+      theme_color: '#047857',
+      icons: [
+        { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+      ],
+    },
+  });
+}
+
 export default defineConfig(({ mode }) => {
   /*
    * Las funciones de `api/` leen `process.env` directamente
@@ -157,7 +200,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), tailwindcss(), localApiFunctions()],
+    plugins: [react(), tailwindcss(), localApiFunctions(), ...pwaPlugin()],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

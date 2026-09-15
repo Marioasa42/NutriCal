@@ -1941,3 +1941,45 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   (no inventar una traducción que no se tiene) y no un defecto a esconder.
   Ampliar el glosario es añadir una línea a `FOOD_TERMS`, no cambiar ninguna
   lógica.
+
+---
+
+## D-054 El service worker cachea solo el *app shell*, nunca las respuestas de las dos APIs
+- **Fecha**: 2026-09-15
+- **Fase**: 3
+- **Estado**: aceptada
+- **Contexto**: la fase 3 pide que la aplicación funcione sin conexión.
+  `useFoodSearch.ts` y `useUsdaFoodSearch.ts` ya distinguen "sin conexión"
+  (`fetchStatus === 'paused'` de TanStack Query) de un error real, y ya
+  dibujan un estado propio para ello (`OfflineState`, `UsdaOfflineState`),
+  pero sin service worker esa distinción nunca llegaba a verse: sin red, la
+  propia página no cargaba, así que no había ni siquiera un componente React
+  vivo que pudiera dibujar ese estado.
+- **Decisión**: `vite-plugin-pwa` en modo `generateSW` (`vite.config.ts`),
+  con `navigateFallback` activado por defecto -sirve `index.html` para
+  cualquier ruta de la SPA sin red, sin enumerar el árbol de
+  `src/app/router.tsx`- y `workbox.navigateFallbackDenylist: [/^\/api\//]`
+  para que las peticiones a `/api/off` y `/api/usda` seguidas de una petición
+  de navegación no reciban ese `index.html` de repuesto. Ninguna respuesta de
+  las dos APIs se cachea. El manifest (nombre, colores del tema, dos iconos
+  PNG generados desde `public/favicon.svg`) hace que la app sea instalable.
+- **Por qué**: buscar un producto nuevo sin conexión no tiene sentido -no hay
+  nada nuevo que buscar-, y cachear esas respuestas habría exigido decidir
+  cuánto tiempo conservarlas y cuándo invalidarlas, una complejidad nueva para
+  un caso de uso que nadie pidió. Lo que sí hacía falta, y era barato, era
+  que la página cargara offline para que el diario (ya en Dexie, ya
+  funcional sin red) y el catálogo local siguieran disponibles.
+- **Alternativa descartada**: (a) cachear también las búsquedas ya vistas con
+  una estrategia stale-while-revalidate, descartado por ser la complejidad de
+  invalidación de arriba a cambio de un beneficio (repetir offline una
+  búsqueda ya hecha) que no es un caso de uso real de la aplicación; (b) un
+  service worker escrito a mano sin dependencias nuevas, descartado porque
+  obligaría a regenerar a mano, en cada build, la lista de archivos a
+  precachear (los nombres llevan hash de contenido) y a reimplementar la
+  lógica de `navigateFallback` que `vite-plugin-pwa` ya resuelve.
+- **Consecuencias**: `vite-plugin-pwa` es la primera dependencia nueva de la
+  fase 3. El service worker solo se genera y registra en `vite build`
+  (`registerType: 'autoUpdate'`, comportamiento por defecto de la librería en
+  modo desarrollo: no se activa con `npm run dev`), así que verificar el modo
+  sin conexión de verdad exige `npm run build && npm run preview`, no basta
+  con el servidor de desarrollo.

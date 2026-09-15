@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 
 import type { FoodDraft } from '@/domain/food/draft';
 import type { Food } from '@/domain/food/food';
 import type { LocalDate } from '@/domain/time/local-date';
+import { useRemoveCustomFood } from '@/features/food-search/custom-food-queries';
 import { useCompleteUsdaFood } from '@/features/food-search/useCompleteUsdaFood';
 
 /**
@@ -121,4 +123,81 @@ export function FoodAction({ date, food }: { date: LocalDate; food: Food }) {
     case 'custom':
       return <AddToDiaryLink date={date} food={food} />;
   }
+}
+
+/**
+ * Editar o borrar un alimento propio, desde la tarjeta del catálogo.
+ *
+ * Solo tiene sentido para `source.kind === 'custom'` (D-032 en su versión de
+ * fase 1: un alimento de Open Food Facts o de USDA no se edita aquí, eso
+ * sería reescribir el dato de la fuente, una funcionalidad distinta a la que
+ * pide esta tarea). Quien llama decide cuándo montarlo.
+ *
+ * Confirmación en dos pasos y borrado con lápida + deshacer, calcado del
+ * patrón de `DayDiary.tsx` (D-042): la confirmación protege del toque mal
+ * dado, el deshacer del arrepentimiento inmediato, y no son lo mismo aunque
+ * lo parezcan. `onDeleted` avisa al padre porque la fila desaparece de la
+ * lista en cuanto se invalida la consulta, y con ella su propio estado: el
+ * hueco con el deshacer tiene que vivir en quien sobrevive al borrado.
+ */
+export function CustomFoodManageLinks({
+  date,
+  food,
+  onDeleted,
+}: {
+  date: LocalDate;
+  food: Food;
+  onDeleted: (food: Food) => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const remove = useRemoveCustomFood();
+
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <Link
+        to={`/dia/${date}/alimento/${food.id}/editar`}
+        className="font-medium text-emerald-700 underline underline-offset-4"
+      >
+        Editar
+      </Link>
+
+      {confirming ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              remove.mutate(food.id, {
+                onSuccess: () => {
+                  onDeleted(food);
+                },
+              });
+            }}
+            disabled={remove.isPending}
+            className="font-medium text-red-700 underline underline-offset-4 disabled:text-slate-400"
+          >
+            Sí, borrar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false);
+            }}
+            className="text-slate-500 underline underline-offset-4"
+          >
+            No
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setConfirming(true);
+          }}
+          className="text-slate-500 underline underline-offset-4 hover:text-red-700"
+        >
+          Borrar
+        </button>
+      )}
+    </div>
+  );
 }

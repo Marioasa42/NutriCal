@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { NutriCalDatabase } from '@/data/db';
+import { createDiaryRepository } from '@/data/repositories/diary';
 import { createFoodRepository } from '@/data/repositories/foods';
-import { anInstant, makeFood } from '@/test/factories';
+import { anInstant, makeFood, makeMealEntry } from '@/test/factories';
 
 describe('repositorio de alimentos', () => {
   let database: NutriCalDatabase;
@@ -83,6 +84,50 @@ describe('repositorio de alimentos', () => {
 
       expect(await foods.all()).toHaveLength(1);
       expect((await foods.searchByName('manzana')).map((food) => food.name)).toEqual(['Manzana']);
+    });
+
+    it('restore deshace un borrado', async () => {
+      const apple = makeFood();
+      await foods.save(apple);
+      await foods.remove(apple.id, anInstant('2026-09-13T09:00:00.000Z'));
+      expect(await foods.byId(apple.id)).toBeUndefined();
+
+      await foods.restore(apple.id, anInstant('2026-09-14T09:00:00.000Z'));
+
+      const restored = await foods.byId(apple.id);
+      expect(restored).toBeDefined();
+      expect(restored?.deletedAt).toBeUndefined();
+      expect(restored?.updatedAt).toBe('2026-09-14T09:00:00.000Z');
+    });
+
+    it('restore sobre algo que no existe no lanza', async () => {
+      const ghost = makeFood();
+      await expect(foods.restore(ghost.id)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('borrar un alimento no rompe los registros del diario que ya lo usan (D-003)', () => {
+    it('el registro conserva su instantánea intacta después de borrar el alimento del catálogo', async () => {
+      const diary = createDiaryRepository(database);
+
+      const homemade = makeFood({ name: 'Tortilla casera', energyKcal: 200, proteinG: 6 });
+      await foods.save(homemade);
+
+      const entry = makeMealEntry({ food: homemade, amountG: 150 });
+      await diary.saveMeal(entry);
+
+      // El registro no guarda una referencia al alimento, guarda una copia
+      // (D-003): borrar el alimento del catálogo no debería tocarlo.
+      await foods.remove(homemade.id, anInstant('2026-09-15T09:00:00.000Z'));
+      expect(await foods.byId(homemade.id)).toBeUndefined();
+
+      const mealsThatDay = await diary.mealsOn(entry.date);
+      expect(mealsThatDay).toHaveLength(1);
+      const [survivingEntry] = mealsThatDay;
+      expect(survivingEntry?.food.name).toBe('Tortilla casera');
+      expect(survivingEntry?.food.per100.macros.energy).toBe(200);
+      expect(survivingEntry?.food.per100.macros.protein).toBe(6);
+      expect(survivingEntry?.portion.amountInBaseUnit).toBe(150);
     });
   });
 

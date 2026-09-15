@@ -1,6 +1,6 @@
 import { db, type NutriCalDatabase } from '@/data/db';
 import { ALIVE, fromStoredFood, toStoredFood } from '@/data/stored';
-import { asDeleted } from '@/data/tombstone';
+import { asDeleted, asRestored } from '@/data/tombstone';
 import type { Food } from '@/domain/food/food';
 import type { FoodId } from '@/domain/identity/ids';
 import { now, type Instant } from '@/domain/time/local-date';
@@ -166,6 +166,21 @@ export function createFoodRepository(database: NutriCalDatabase) {
         return;
       }
       await database.foods.put(toStoredFood(asDeleted(fromStoredFood(stored), at)));
+    },
+
+    /**
+     * Deshace un borrado quitando la lápida. Calcado de
+     * `diaryRepository.restoreMeal`, con el mismo motivo: no lanza si el
+     * alimento ya no existe, porque quien deshace pulsa un botón que puede
+     * llevar un rato en pantalla, y que la fila haya desaparecido por otra
+     * vía no es un fallo de programación.
+     */
+    async restore(id: FoodId, at: Instant = now()): Promise<void> {
+      const stored = await database.foods.get(id);
+      if (stored === undefined) {
+        return;
+      }
+      await database.foods.put(toStoredFood(asRestored(fromStoredFood(stored), at)));
     },
 
     /** Todo lo vivo. Pensado para diagnósticos y para el sembrado de ejemplo. */

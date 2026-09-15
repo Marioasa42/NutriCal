@@ -4,6 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { InvalidDate } from '@/app/routes/InvalidDate';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { BarcodeField } from '@/features/food-search/BarcodeField';
+import { BarcodeScanner } from '@/features/food-search/BarcodeScanner';
 import {
   CatalogResults,
   SearchResults,
@@ -159,6 +160,7 @@ function Search({ date }: { date: LocalDate }) {
       </section>
 
       <BarcodeField date={date} />
+      <BarcodeScanner date={date} />
     </div>
   );
 

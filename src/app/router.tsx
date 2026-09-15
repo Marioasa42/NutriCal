@@ -7,6 +7,8 @@ import { TodayRedirect } from '@/app/routes/TodayRedirect';
 import { EditEntryPage } from '@/features/diary/EditEntryPage';
 import { LogEntryPage } from '@/features/diary/LogEntryPage';
 import { BarcodePage } from '@/features/food-search/BarcodePage';
+import { CreateFoodPage } from '@/features/food-search/CreateFoodPage';
+import { EditFoodPage } from '@/features/food-search/EditFoodPage';
 import { SearchPage } from '@/features/food-search/SearchPage';
 import { GoalsPage } from '@/features/goals/GoalsPage';
 import { SettingsPage } from '@/features/profile/SettingsPage';
@@ -31,6 +33,8 @@ export const router = createBrowserRouter([
       { index: true, Component: TodayRedirect },
       { path: 'dia/:date', Component: DayPage },
       { path: 'dia/:date/buscar', Component: SearchPage },
+      { path: 'dia/:date/crear-alimento', Component: CreateFoodPage },
+      { path: 'dia/:date/alimento/:foodId/editar', Component: EditFoodPage },
       { path: 'dia/:date/codigo/:barcode', Component: BarcodePage },
       // Registrar un alimento concreto en un día. El alimento viaja como
       // identificador del catálogo local, por el mismo motivo que el código de

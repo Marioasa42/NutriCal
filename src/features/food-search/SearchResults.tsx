@@ -2,10 +2,16 @@ import type { FoodDraft } from '@/domain/food/draft';
 import type { Food } from '@/domain/food/food';
 import type { FoodId } from '@/domain/identity/ids';
 import type { LocalDate } from '@/domain/time/local-date';
+import { useRestoreCustomFood } from '@/features/food-search/custom-food-queries';
 import { DraftCard, FoodCard } from '@/features/food-search/FoodResultCard';
-import { CompleteDraftLink, FoodAction } from '@/features/food-search/ResultActions';
+import {
+  CompleteDraftLink,
+  CustomFoodManageLinks,
+  FoodAction,
+} from '@/features/food-search/ResultActions';
 import type { FoodSearchPage } from '@/services/off';
 import type { UsdaSearchPage } from '@/services/usda';
+import { displayFoodName } from '@/services/usda/food-terms';
 
 /** Los micronutrientes de USDA solo llegan al completar (D-048): se avisa en la propia tarjeta. */
 const USDA_MICROS_NOTE = 'Los micronutrientes se completan al añadir esta comida al diario.';
@@ -21,14 +27,23 @@ export function CatalogResults({
   foods,
   searched,
   date,
+  deletedFoods = [],
+  onFoodDeleted,
+  onFoodRestored,
 }: {
   foods: readonly Food[];
   searched: boolean;
   date: LocalDate;
+  /** Alimentos propios borrados en esta visita que todavía se pueden deshacer (D-042). */
+  deletedFoods?: readonly Food[];
+  onFoodDeleted?: (food: Food) => void;
+  onFoodRestored?: (id: FoodId) => void;
 }) {
   if (!searched) {
     return null;
   }
+
+  const shown = foods.length + deletedFoods.length;
 
   return (
     <section className="flex flex-col gap-3">
@@ -36,7 +51,7 @@ export function CatalogResults({
         En tu catálogo
       </h2>
 
-      {foods.length === 0 ? (
+      {shown === 0 ? (
         // Se dice, en lugar de no pintar nada: una sección que desaparece deja
         // sin respuesta a quien está mirando si lo tiene ya guardado.
         <p className="text-sm text-slate-500">
@@ -45,11 +60,59 @@ export function CatalogResults({
       ) : (
         <ul className="flex flex-col gap-3">
           {foods.map((food) => (
-            <ResultCard key={food.id} date={date} food={food} />
+            <ResultCard
+              key={food.id}
+              date={date}
+              food={food}
+              {...(onFoodDeleted !== undefined ? { onFoodDeleted } : {})}
+            />
+          ))}
+          {deletedFoods.map((food) => (
+            <DeletedFoodRow
+              key={food.id}
+              food={food}
+              onRestored={onFoodRestored ?? (() => undefined)}
+            />
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * El hueco que deja un alimento propio borrado, con su deshacer.
+ *
+ * Calcado de `DeletedRow` en `features/diary/DayDiary.tsx` (D-042): se
+ * enseña tachado en vez de desaparecer sin más, para que quien lo borró
+ * tenga sitio donde volver si se equivocó.
+ */
+function DeletedFoodRow({ food, onRestored }: { food: Food; onRestored: (id: FoodId) => void }) {
+  const restore = useRestoreCustomFood();
+
+  return (
+    <li
+      aria-live="polite"
+      className="flex items-center justify-between gap-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4"
+    >
+      <span className="min-w-0 truncate text-slate-500">
+        <span className="line-through">{displayFoodName(food)}</span> · borrado
+      </span>
+      <button
+        type="button"
+        onClick={() => {
+          restore.mutate(food.id, {
+            onSuccess: () => {
+              onRestored(food.id);
+            },
+          });
+        }}
+        disabled={restore.isPending}
+        className="shrink-0 text-sm font-medium text-emerald-700 underline underline-offset-4 disabled:text-slate-400"
+      >
+        Deshacer
+      </button>
+    </li>
   );
 }
 
@@ -74,12 +137,27 @@ function usdaMicrosNote(food: Food): string | undefined {
  * de USDA) pueden mezclar alimentos de cualquier fuente y necesitan
  * exactamente esto mismo, así que vive en un solo sitio en vez de en tres.
  */
-function ResultCard({ date, food }: { date: LocalDate; food: Food }) {
+function ResultCard({
+  date,
+  food,
+  onFoodDeleted,
+}: {
+  date: LocalDate;
+  food: Food;
+  onFoodDeleted?: (food: Food) => void;
+}) {
   const note = usdaMicrosNote(food);
   return (
     <FoodCard
       food={food}
-      action={<FoodAction date={date} food={food} />}
+      action={
+        <div className="flex flex-col items-end gap-2">
+          <FoodAction date={date} food={food} />
+          {food.source.kind === 'custom' && onFoodDeleted !== undefined ? (
+            <CustomFoodManageLinks date={date} food={food} onDeleted={onFoodDeleted} />
+          ) : null}
+        </div>
+      }
       {...(note !== undefined ? { note } : {})}
     />
   );

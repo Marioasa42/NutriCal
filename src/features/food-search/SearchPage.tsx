@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 
 import { InvalidDate } from '@/app/routes/InvalidDate';
+import type { Food } from '@/domain/food/food';
+import type { FoodId } from '@/domain/identity/ids';
 import { tryLocalDate, type LocalDate } from '@/domain/time/local-date';
 import { BarcodeField } from '@/features/food-search/BarcodeField';
 import { BarcodeScanner } from '@/features/food-search/BarcodeScanner';
@@ -88,6 +90,18 @@ function Search({ date }: { date: LocalDate }) {
   // Lo que se está tecleando ahora mismo. Solo alimenta la búsqueda local.
   const [text, setText] = useState(submitted);
 
+  // Alimentos propios borrados en esta visita que todavía se pueden deshacer
+  // (D-042): en cuanto se borra uno, desaparece de `local.foods` al
+  // invalidarse la consulta, así que el hueco lo recuerda quien sobrevive al
+  // borrado -esta pantalla-, no la fila que se acaba de desmontar.
+  const [deletedFoods, setDeletedFoods] = useState<readonly Food[]>([]);
+  const noteFoodDeleted = (food: Food) => {
+    setDeletedFoods((previous) => [...previous, food]);
+  };
+  const forgetFood = (id: FoodId) => {
+    setDeletedFoods((previous) => previous.filter((food) => food.id !== id));
+  };
+
   const local = useLocalFoodSearch(text);
   const { state, retry, isRefreshing } = useFoodSearch(submitted);
   const usda = useUsdaFoodSearch(submitted);
@@ -140,7 +154,21 @@ function Search({ date }: { date: LocalDate }) {
         busy={isRefreshing || usda.isRefreshing}
       />
 
-      <CatalogResults foods={local.foods} searched={local.searched} date={date} />
+      <Link
+        to={`/dia/${date}/crear-alimento`}
+        className="self-start text-sm font-medium text-emerald-700 underline underline-offset-4"
+      >
+        Crear mi propio alimento
+      </Link>
+
+      <CatalogResults
+        foods={local.foods}
+        searched={local.searched}
+        date={date}
+        deletedFoods={deletedFoods}
+        onFoodDeleted={noteFoodDeleted}
+        onFoodRestored={forgetFood}
+      />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">

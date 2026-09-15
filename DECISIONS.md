@@ -2270,3 +2270,74 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   de verdad (nada en `deps.env`, la clave real ausente del `process.env` de
   la propia máquina de pruebas) en vez de simular la ausencia con un objeto
   vacío pasado a mano.
+
+---
+
+## D-059 Crear, editar y borrar alimentos propios, cerrando el hueco de la fase 1 paso 5
+- **Fecha**: 2026-09-15
+- **Fase**: 1
+- **Estado**: aceptada
+- **Contexto**: `FoodSource` tiene la rama `'custom'` desde el diseño del
+  dominio, y `data/seed.ts` la usa para los datos de ejemplo, pero
+  comprobado antes de escribir nada: nunca se construyó ningún camino de
+  interfaz que dejara crear un alimento desde cero. Solo el tipo y el
+  sembrado fijo existían.
+- **Decisión**: `domain/food/create-custom-food.ts` añade
+  `createCustomFood`/`updateCustomFood`, hermanas de `complete-draft.ts` en
+  estilo (unión discriminada de resultado, contexto inyectable) pero para el
+  caso "desde cero": piden nombre, unidad base, una **cantidad de
+  referencia** (no siempre 100; una receta casera puede conocerse solo por
+  sus totales) y los macros/micros a esa cantidad, y escalan a los "por 100"
+  del dominio reutilizando `scaleMacros`/`scaleMicros`
+  (`nutrition/scaling.ts`) con el factor invertido -cero código de escalado
+  nuevo-. Todo lo tecleado se marca en `completion.userFilled`, con el mismo
+  campo que ya usa D-002, pero aquí cubriendo las cuatro macros obligatorias
+  a la vez porque no hay ninguna fuente de la que faltara solo una parte.
+
+  `foodRepository` gana `restore` (deshacer un borrado), calcado de
+  `diaryRepository.restoreMeal`. La pantalla de búsqueda gana un enlace
+  permanente "Crear mi propio alimento" (no solo cuando la búsqueda está
+  vacía), dos rutas nuevas (`/dia/:date/crear-alimento`,
+  `/dia/:date/alimento/:foodId/editar`) y, en la tarjeta de un alimento
+  propio del catálogo, "Editar"/"Borrar" con el mismo patrón de confirmación
+  en dos pasos y deshacer que `DayDiary.tsx` ya usa para las comidas
+  (D-042): la fila borrada se recuerda en el componente padre porque se
+  desmonta en cuanto se invalida la consulta.
+- **Por qué**: reutilizar `scaleMacros`/`scaleMicros` en vez de escribir un
+  escalado propio es la misma razón de siempre -una sola función que ya
+  tiene sus tests decide qué pasa con una clave ausente y con un cero real
+  (D-001), y escribirla dos veces es la forma más segura de que un día
+  hagan cosas distintas-. El campo de cantidad de referencia, en vez de
+  fijar siempre "por 100", existe porque exigir la división a mano antes de
+  poder escribir nada habría sido fricción real para el caso más probable
+  de usar esto: una receta casera de la que solo se conocen los totales de
+  la olla entera. Editar y borrar con el patrón de D-042 en vez de uno
+  nuevo es consistencia deliberada, no la opción más corta: la persona que
+  ya aprendió a borrar una comida no tiene que aprender un gesto distinto
+  para borrar un alimento.
+- **Alternativa descartada**: (a) pedir los macros siempre "por 100" sin
+  campo de referencia, descartado por la fricción de arriba; (b) ampliar
+  `NutrientCompletion` para que también marque qué micronutrientes puso la
+  persona, descartado **por ahora**: es una limitación real y consciente
+  (ver Consecuencias), no una que se resuelva de paso en esta tarea; (c)
+  reutilizar `useCatalogFood` de `features/diary/queries.ts` para la
+  pantalla de edición, descartado porque cruzaría la dirección de
+  dependencias que D-027 fija entre funcionalidades -se repite el patrón
+  con la misma clave de caché, `foodKeys.byId`, no el código-.
+- **Consecuencias**: **limitación conocida, anotada a propósito**: un
+  micronutriente tecleado a mano en este formulario se guarda igual que uno
+  que viniera de USDA, porque `NutrientCompletion.userFilled` solo cubre
+  `MacroKey`, nunca `MicronutrientId`. Contradice, en ese punto concreto, el
+  principio de D-002 de distinguir el dato de la fuente del dato de la
+  persona usuaria. Queda para cuando haga falta de verdad ampliar el tipo,
+  no se amplía aquí para no adelantar trabajo sin un caso de uso real
+  delante. También comprobado y no solo razonado: borrar un alimento propio
+  no toca los registros del diario que ya lo usan, porque `MealEntry.food`
+  es una copia congelada en el momento de registrar (D-003), nunca una
+  referencia -hay un test explícito para esto en `foods.test.ts`-, y el
+  formulario de edición lo explica en un aviso fijo para que no sorprenda a
+  quien edite una cifra semanas después de haber registrado ya varias
+  comidas con ella. Exportar e importar un alimento propio no necesitó
+  ningún cambio: la fase 3 ya trata `foods` como una tabla genérica sin
+  mirar `source.kind`, y `foodSourceSchema` ya validaba la rama `custom`
+  desde que se escribió.

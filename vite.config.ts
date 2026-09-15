@@ -182,7 +182,7 @@ function pwaPlugin(): Plugin[] {
     },
   });
 }
- /* La versión de la aplicación, para `appVersion` en el archivo exportado
+/* La versión de la aplicación, para `appVersion` en el archivo exportado
  * (`domain/transfer/export.ts`) - solo un dato de diagnóstico en el archivo,
  * nunca algo de lo que dependa la importación. Se lee aquí, en tiempo de
  * build, con `node:fs`, y se sustituye por una cadena literal con `define`:
@@ -213,7 +213,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-        plugins: [react(), tailwindcss(), localApiFunctions(), ...pwaPlugin()],
+    plugins: [react(), tailwindcss(), localApiFunctions(), ...pwaPlugin()],
     define: {
       __APP_VERSION__: JSON.stringify(APP_VERSION),
     },

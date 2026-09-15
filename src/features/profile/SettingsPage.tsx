@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 
 import { now } from '@/domain/time/local-date';
 import { ExportDataButton } from '@/features/profile/ExportDataButton';
+import { ImportDataButton } from '@/features/profile/ImportDataButton';
 import { useProfile } from '@/features/profile/profile-context';
 import { useSaveProfile } from '@/features/profile/queries';
 import { browserTimeZone, isValidTimeZone, supportedTimeZones } from '@/shared/lib/time-zone';
@@ -134,6 +135,7 @@ export function SettingsPage() {
       </form>
 
       <ExportDataButton />
+      <ImportDataButton />
     </div>
   );
 }

@@ -2082,3 +2082,87 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   (`features/profile/export-file.ts`) construye el nombre del archivo a partir
   de la fecha del propio `exportedAt`, con su test aparte. La importación
   (siguiente paso de la fase 3) reutiliza el mismo `ExportEnvelope`.
+
+---
+
+## D-055 Importar reconstruye con constructores dentro del propio esquema de Zod, fusiona por id y escribe en una única transacción
+- **Fecha**: 2026-09-15
+- **Fase**: 3
+- **Estado**: aceptada
+- **Contexto**: D-025 (fase 0) ya advertía que la importación sería el punto
+  donde la garantía de los tipos con marca se puede evaporar de golpe: es
+  entrada externa (un archivo pudo tocarse a mano, venir de una versión
+  antigua, o estar corrupto) que tiene que acabar convertida en las mismas
+  `Grams`, `Kilocalories`, `LocalDate`, `FoodId`... que usa el resto del
+  dominio. D-007 (fase 0) ya había fijado que la importación valida con Zod y
+  aplica una cadena de migraciones de versión `n` a `n+1`. D-052 fija cómo
+  desempatar dos versiones de una misma entidad por `updatedAt`.
+- **Decisión**: tres piezas, en dos archivos nuevos.
+
+  1. **`domain/transfer/import-schema.ts`.** Un esquema de Zod por tipo de
+     entidad (`Food`, `MealEntry`, `ExerciseEntry`, `DailyGoals`, `Profile`,
+     con sus formas de masa y de volumen donde D-005 las distingue). Cada
+     campo con marca pasa por un `.transform()` que llama al constructor de
+     verdad (`grams`, `kilocalories`, `localDate`, `instant`...) envuelto en
+     `fromConstructor`, un ayudante que convierte la excepción del
+     constructor -si el valor no vale- en un fallo de validación de Zod en
+     vez de en una excepción suelta, para que el resto del archivo se siga
+     comprobando en la misma pasada. Los identificadores no tienen un
+     constructor así (`newFoodId()` y sus hermanos solo generan uno nuevo con
+     `crypto.randomUUID()`, nunca marcan uno ya existente), así que este
+     archivo añade sus seis funciones `asFoodId`/`asMealEntryId`/... que
+     comprueban la forma de UUID antes de marcar, con el mismo patrón que
+     `fromStored` en `data/stored.ts`: una comprobación explícita antes de
+     cada `as`, confinada y documentada, nunca un `as` a pelo.
+
+     `parseExportEnvelope` valida primero solo la envoltura
+     (`schemaVersion`), y a partir de ahí despacha: una versión mayor que la
+     que la aplicación conoce se rechaza con un mensaje claro en vez de
+     intentar adivinar; versiones intermedias pasarían por un mapa de
+     migradores `n -> n+1`, vacío hoy porque solo existe la versión 1.
+
+  2. **`domain/transfer/import-all.ts`.** Fusiona por id: para cada fila del
+     archivo, si no existe se inserta; si existe, se compara `updatedAt` y
+     gana la más reciente (D-052 aplicado aquí). `preview` hace la misma
+     comparación sin escribir nada -para que la pantalla pueda enseñar un
+     resumen y pedir confirmación antes de tocar disco-, e `importAll` hace
+     lo mismo escribiendo de verdad, con las cinco tablas envueltas en una
+     única `database.transaction('rw', ...)`.
+  3. **`ImportDataButton.tsx`** (`features/profile/`) en dos pasos: elegir el
+     archivo solo lo valida y enseña el balance ("4 nuevos, 2 actualizados
+     con datos más recientes, 1 conservado"); escribir de verdad exige una
+     segunda pulsación aparte.
+- **Por qué**: envolver el constructor real dentro del `.transform()` de Zod,
+  en vez de validar el rango con `z.number().nonnegative()` primero y llamar
+  al constructor después por separado, evita duplicar la regla de validez en
+  dos sitios (el esquema y `units.ts`) que podrían desincronizarse; aquí solo
+  hay una fuente de verdad de "qué es un `Grams` válido", que es `grams()`
+  mismo. La transacción única existe porque una importación es una operación
+  o entera o ninguna: un archivo que falla en la fila 8 de 10 no debe dejar
+  las 7 primeras escritas y el resto no, que es un estado a medias que nadie
+  pidió y del que la aplicación no sabría recuperarse. La confirmación en dos
+  pasos existe porque fusionar sigue siendo escribir sobre el historial de
+  alguien, aunque la regla de "gana lo más reciente" haga ese cambio seguro
+  por construcción.
+- **Alternativa descartada**: (a) validar el rango de cada magnitud con las
+  reglas de Zod (`.nonnegative()`, `.finite()`) y llamar al constructor
+  después, descartado por la duplicación de reglas ya explicada; (b) generar
+  identificadores nuevos al importar en vez de conservar los del archivo,
+  descartado porque rompería la fusión por id: dos importaciones del mismo
+  archivo, o una comida cuyo `food.foodId` ya no correspondería a ningún
+  alimento del catálogo, duplicando en vez de fusionando; (c) escribir cada
+  tabla en su propia transacción pequeña, descartado porque es exactamente lo
+  que permite el estado a medias que la pieza 2 evita a propósito.
+- **Consecuencias**: el cast final `parsed as ExportPayload` en
+  `parseExportEnvelope` (documentado en el propio archivo) no afirma nada
+  sobre datos sin comprobar: para cuando se llega ahí, cada magnitud, fecha e
+  identificador ya pasó por su constructor real. Lo que resuelve es una
+  diferencia de tipos entre lo que Zod infiere para un campo `.optional()`
+  (`clave: T | undefined`, la clave siempre presente) y lo que
+  `exactOptionalPropertyTypes` exige (`clave?: T`, la clave puede faltar);
+  en tiempo de ejecución ya coinciden, porque un campo ausente en el JSON
+  nunca llega a escribirse en el resultado de Zod. Un test de atomicidad
+  (`import-all.test.ts`) fuerza el fallo de una tabla a mitad y comprueba que
+  las otras cuatro, que sí habrían tenido éxito por su cuenta, tampoco
+  conservan nada: es la transacción la que se deshace entera, no solo la
+  fila que rompió.

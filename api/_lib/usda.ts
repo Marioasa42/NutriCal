@@ -51,13 +51,57 @@ export class MissingApiKeyError extends Error {
   }
 }
 
-/** Lee la clave del entorno de ejecución. Lanza si no está puesta. */
-export function requireApiKey(env: Record<string, string | undefined> = process.env): string {
-  const key = env[API_KEY_ENV_VAR];
-  if (key === undefined || key === '') {
+/**
+ * Lee la clave del entorno de ejecución. Lanza si no está puesta.
+ *
+ * Ya no lleva `env: ... = process.env` como parámetro por defecto. Ese
+ * valor por defecto se evalúa en el sitio donde se llama, ANTES de entrar
+ * al cuerpo de esta función: si `process` no existiera como global en el
+ * entorno de ejecución, la propia evaluación del valor por defecto lanzaría
+ * un `ReferenceError` antes de que hubiera una sola línea de este archivo
+ * corriendo, y ningún registro de diagnóstico de aquí dentro llegaría a
+ * imprimirse. `typeof process` en cambio nunca lanza, exista `process` o
+ * no: es la única forma segura de preguntarlo (D-058, D-059).
+ *
+ * El bloque de trazas es diagnóstico temporal para el incidente de D-058:
+ * quitar en cuanto los registros de un despliegue real expliquen la causa.
+ * Nunca imprime el valor de la clave, solo si está presente y cuántos
+ * caracteres tiene.
+ */
+export function requireApiKey(env?: Record<string, string | undefined>): string {
+  const hasProcess = typeof process !== 'undefined';
+  // Los tipos ambientales de Node dan por hecho que si `process` existe,
+  // `process.env` es siempre un objeto real. Ese es exactamente el supuesto
+  // que este diagnóstico existe para poner a prueba en un entorno de
+  // ejecución real, así que la condición se comprueba en tiempo de
+  // ejecución aunque el compilador la dé por segura.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  const hasProcessEnv = hasProcess && typeof process.env === 'object' && process.env !== null;
+  const source: Record<string, string | undefined> | undefined =
+    env ?? (hasProcessEnv ? process.env : undefined);
+
+  const rawValue = source?.[API_KEY_ENV_VAR];
+
+  console.log(
+    '[USDA][diagnostico-clave]',
+    JSON.stringify({
+      envParamProvided: env !== undefined,
+      hasProcess,
+      hasProcessEnv,
+      sourceIsDefined: source !== undefined,
+      sourceKeyCount: source === undefined ? null : Object.keys(source).length,
+      keyName: API_KEY_ENV_VAR,
+      keyPresent: rawValue !== undefined && rawValue !== '',
+      keyLength: rawValue === undefined ? null : rawValue.length,
+      nodeEnv: hasProcessEnv ? (process.env.NODE_ENV ?? null) : null,
+      vercelEnv: hasProcessEnv ? (process.env.VERCEL_ENV ?? null) : null,
+    }),
+  );
+
+  if (rawValue === undefined || rawValue === '') {
     throw new MissingApiKeyError();
   }
-  return key;
+  return rawValue;
 }
 
 /** Recorta y normaliza el texto de búsqueda antes de construir la URL saliente. */

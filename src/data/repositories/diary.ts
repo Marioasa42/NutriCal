@@ -108,6 +108,22 @@ export function createDiaryRepository(database: NutriCalDatabase) {
       await database.exerciseEntries.put(toStored(asDeleted(fromStored(stored), at)));
     },
 
+    /**
+     * Todas las comidas, vivas o con lápida. Uso exclusivo de la exportación
+     * (D-006): un borrado es información que hay que propagar en el archivo.
+     * Ninguna pantalla del diario debería llamar a esto.
+     */
+    async allMealsIncludingDeleted(): Promise<readonly MealEntry[]> {
+      const stored = await database.mealEntries.toArray();
+      return stored.map(fromStored).sort(byCreation);
+    },
+
+    /** Igual que `allMealsIncludingDeleted`, para el ejercicio. Mismo uso exclusivo. */
+    async allExerciseIncludingDeleted(): Promise<readonly ExerciseEntry[]> {
+      const stored = await database.exerciseEntries.toArray();
+      return stored.map(fromStored).sort(byCreation);
+    },
+
     /** Los días que tienen algún registro vivo, para pintar el calendario. */
     async datesWithEntries(): Promise<readonly LocalDate[]> {
       const [meals, exercise] = await Promise.all([

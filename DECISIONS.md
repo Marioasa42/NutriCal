@@ -2270,3 +2270,81 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   de verdad (nada en `deps.env`, la clave real ausente del `process.env` de
   la propia máquina de pruebas) en vez de simular la ausencia con un objeto
   vacío pasado a mano.
+
+---
+
+## D-059 La hipótesis del runtime Edge de D-058 no se sostuvo: trazas de diagnóstico en su lugar
+- **Fecha**: 2026-09-15
+- **Fase**: 2 (mismo incidente que D-058, en producción)
+- **Estado**: aceptada
+- **Contexto**: D-058 diagnosticó el 500 desnudo de USDA como, muy
+  probablemente, un `ReferenceError` al evaluar `process.env` bajo un
+  runtime Edge, y lo corrigió fijando `export const config = { runtime:
+  'nodejs' }` en las cuatro rutas de `api/`. Desplegado ese cambio, con
+  `USDA_API_KEY` recreada desde cero en Vercel con Production, Preview y
+  Development marcados, y con un redespliegue de por medio, el fallo sigue
+  exactamente igual. Eso descarta la hipótesis del runtime: si `process` no
+  existiera como global, fijar el runtime a Node lo habría arreglado. No lo
+  hizo, así que la causa es otra.
+
+  Comprobado también, línea a línea, si `api/usda/` difiere de `api/off/`
+  en algo más que el propio uso de la clave: mismos dos archivos de ruta por
+  fuente (`search.ts` y un segmento dinámico bajo una subcarpeta,
+  `product/[barcode].ts` frente a `food/[fdcId].ts`), mismos nombres sin
+  ningún carácter oculto (comprobado con `git ls-tree` y `cat -A`, no solo
+  mirando el explorador de archivos de Windows, que no distingue
+  mayúsculas de minúsculas y podría estar ocultando una diferencia real),
+  mismo `tsconfig.json` para las dos porque Vercel compila toda la carpeta
+  `api/` de una vez (`tsconfig.test.ts`, ya cubierto por D-017), y ningún
+  `functions` en `vercel.json` que trate a una carpeta distinto de la otra.
+  No hay ninguna asimetría estructural que explique por qué OFF responde y
+  USDA no: la única diferencia de verdad entre las dos es que USDA lee una
+  variable de entorno y OFF no lee ninguna, lo que apunta a la variable en
+  sí -su nombre o su valor en Vercel, no el código- como sospechosa
+  principal, más que a nada que este repositorio pueda arreglar sin datos
+  reales de un despliegue.
+- **Decisión**: seguir suponiendo no vale ya nada; hacen falta datos de un
+  despliegue real. `requireApiKey` (`api/_lib/usda.ts`) gana una traza que
+  registra, en cada llamada, sin excepción: si `process` existe
+  (`typeof process !== 'undefined'`, la única forma de preguntarlo que
+  nunca lanza, ni siquiera si `process` no estuviera declarado), si
+  `process.env` es un objeto de verdad, cuántas claves tiene el origen que
+  se acabó usando, si `USDA_API_KEY` está presente y **cuántos caracteres**
+  tiene -nunca el valor-, y `NODE_ENV`/`VERCEL_ENV` para saber en qué
+  entorno cree Vercel que se está ejecutando la función. De paso,
+  `requireApiKey` deja de llevar `env: ... = process.env` como parámetro
+  por defecto: ese valor por defecto se evalúa en el sitio de la llamada,
+  ANTES de entrar al cuerpo de la función, así que si `process` no
+  existiera, la propia evaluación del valor por defecto lanzaría un
+  `ReferenceError` antes de que una sola línea de la traza llegara a
+  correr -el mismo fallo que D-058 ya diagnosticó, reintroducido en el
+  sitio exacto donde se supone que hay que diagnosticarlo-. Ahora la función
+  recibe `env?: Record<string, string | undefined>` sin valor por defecto,
+  y resuelve `process.env` dentro del cuerpo, después de comprobar
+  `typeof process` con seguridad.
+- **Por qué**: un valor por defecto de parámetro no es el sitio para una
+  comprobación defensiva, porque se evalúa fuera del cuerpo que se quiere
+  proteger. Registrar la longitud de la clave y no la clave misma mantiene
+  la regla ya fijada en `usda.ts` ("la URL con la clave dentro nunca sale de
+  esta función") sin perder la única información de la clave que de verdad
+  hace falta para diagnosticar: si está vacía, si tiene la longitud
+  esperada de una clave de `api.data.gov`, o si tiene una longitud rara que
+  delataría un espacio o una comilla colada al pegarla en el panel de
+  Vercel.
+- **Alternativa descartada**: (a) seguir ajustando el código a ciegas con
+  una segunda hipótesis sin comprobar, descartado porque es exactamente lo
+  que ya falló una vez con el runtime Edge: sin dato real, la siguiente
+  suposición tiene las mismas probabilidades de estar equivocada que la
+  anterior; (b) registrar el valor de la clave o un prefijo de ella "solo
+  para depurar y quitarlo después", descartado sin excepción: un registro
+  de Vercel puede vivir mucho más que la vida útil de esta clave, y un
+  secreto en un registro es un secreto filtrado igual que uno en el
+  repositorio.
+- **Consecuencias**: este bloque de trazas es diagnóstico temporal, no una
+  pieza permanente de la aplicación: se retira en cuanto un despliegue real
+  con estas trazas explique la causa, y esa explicación se añade como una
+  entrada nueva en este archivo, no como una edición de esta. Mientras
+  tanto, imprimir en cada llamada (éxito o fallo) es deliberado: si el
+  fallo fuera intermitente, un registro que solo hablara en el camino de
+  error no distinguiría "nunca ha llegado a ejecutarse este código" de
+  "se ejecuta y decide que falta la clave".

@@ -173,6 +173,18 @@ export function createFoodRepository(database: NutriCalDatabase) {
       const stored = await database.foods.where('isDeleted').equals(ALIVE).toArray();
       return stored.map(fromStoredFood);
     },
+
+    /**
+     * Todo, vivo o con lápida. Uso exclusivo de la exportación (D-006): un
+     * borrado es información que hay que propagar en el archivo, igual que
+     * cualquier otro cambio. Ninguna pantalla debería llamar a esto: mostrar
+     * un alimento borrado en el catálogo sería el propio bug que las lápidas
+     * existen para evitar.
+     */
+    async allIncludingDeleted(): Promise<readonly Food[]> {
+      const stored = await database.foods.toArray();
+      return stored.map(fromStoredFood);
+    },
   };
 }
 

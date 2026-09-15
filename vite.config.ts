@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -182,6 +182,19 @@ function pwaPlugin(): Plugin[] {
     },
   });
 }
+ /* La versión de la aplicación, para `appVersion` en el archivo exportado
+ * (`domain/transfer/export.ts`) - solo un dato de diagnóstico en el archivo,
+ * nunca algo de lo que dependa la importación. Se lee aquí, en tiempo de
+ * build, con `node:fs`, y se sustituye por una cadena literal con `define`:
+ * la alternativa, `import packageJson from '../package.json'`, metería en el
+ * paquete del navegador el `package.json` entero -nombres de dependencias,
+ * scripts- por un solo campo.
+ */
+const APP_VERSION = (
+  JSON.parse(readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8')) as {
+    version: string;
+  }
+).version;
 
 export default defineConfig(({ mode }) => {
   /*
@@ -200,7 +213,10 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
-    plugins: [react(), tailwindcss(), localApiFunctions(), ...pwaPlugin()],
+        plugins: [react(), tailwindcss(), localApiFunctions(), ...pwaPlugin()],
+    define: {
+      __APP_VERSION__: JSON.stringify(APP_VERSION),
+    },
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

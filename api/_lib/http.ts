@@ -38,7 +38,15 @@ export type ErrorCode =
   | 'rate_limited'
   | 'upstream_rate_limited'
   | 'upstream_error'
-  | 'upstream_timeout';
+  | 'upstream_timeout'
+  /**
+   * El servidor no puede ni intentar hablar con la fuente: falta o está rota
+   * la configuración del propio despliegue (hoy, la clave de USDA). Va
+   * separado de `upstream_error` a propósito: ese dice "la fuente ha fallado,
+   * prueba en un momento", y aquí reintentar no arregla nada porque el fallo
+   * es nuestro y permanente hasta el próximo despliegue. Ver D-056.
+   */
+  | 'server_misconfigured';
 
 export interface ApiError {
   readonly error: {

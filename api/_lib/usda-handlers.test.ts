@@ -40,6 +40,48 @@ function deps(overrides: Partial<UsdaHandlerDeps> = {}): UsdaHandlerDeps {
   };
 }
 
+/**
+ * `deps()` de arriba siempre pone algo en `env`, así que nunca ejercita la
+ * rama por la que `requireApiKey` cae a su parámetro por defecto
+ * (`= process.env`) -que es exactamente lo que hacen de verdad
+ * `api/usda/search.ts` y `api/usda/food/[fdcId].ts`, que no pasan `env` en
+ * absoluto-. `depsSinEnv` reproduce eso: construye las dependencias sin la
+ * clave `env`, para que la prueba corra el mismo camino que producción.
+ */
+function depsSinEnv(overrides: Partial<Omit<UsdaHandlerDeps, 'env'>> = {}): UsdaHandlerDeps {
+  const bucket: TokenBucket = createTokenBucket({ capacity: 100, refillPerMinute: 100 });
+  return {
+    bucket,
+    now: () => 1_000_000,
+    fetchImpl: upstream(200, { foods: [] }),
+    ...overrides,
+  };
+}
+
+/**
+ * Quita `USDA_API_KEY` de `process.env` real durante `run`, y lo devuelve tal
+ * y como estaba después, exista o no.
+ *
+ * Hace falta porque este mismo `process.env` es el que carga `.env.local` al
+ * arrancar Vitest (`vite.config.ts` hace lo mismo para `vitest` que para
+ * `vite dev`, D-051): en la máquina de quien tenga una clave de verdad en su
+ * `.env.local` para desarrollar, `depsSinEnv()` a secas encontraría esa clave
+ * real y la prueba dejaría de probar "sin clave" sin que nadie lo notara.
+ */
+async function withoutRealApiKey<T>(run: () => Promise<T>): Promise<T> {
+  const original = process.env.USDA_API_KEY;
+  delete process.env.USDA_API_KEY;
+  try {
+    return await run();
+  } finally {
+    if (original === undefined) {
+      delete process.env.USDA_API_KEY;
+    } else {
+      process.env.USDA_API_KEY = original;
+    }
+  }
+}
+
 describe('búsqueda en USDA', () => {
   it('rechaza una consulta demasiado corta sin salir a la red', async () => {
     let called = false;
@@ -61,8 +103,14 @@ describe('búsqueda en USDA', () => {
    * El caso que la decisión D-047 pide probar explícitamente: sin la variable
    * de entorno, la petición no debe llegar a construir una URL sin clave hacia
    * FDC ni reventar con un error sin forma. Tiene que dar un fallo controlado.
+   *
+   * Con `env: {}` pasado a mano: prueba la rama en la que SÍ se pasa un `env`,
+   * pero está vacío. No es la rama que corre en producción (ver el siguiente
+   * test), pero sigue siendo un caso real -por ejemplo, si algún día algo más
+   * construyera `deps` a mano con un objeto vacío por error- y merece su
+   * propia prueba.
    */
-  it('sin la clave configurada, da un error controlado y no sale a la red', async () => {
+  it('con env vacío pasado a mano, da un error controlado y no sale a la red', async () => {
     let called = false;
     const response = await handleUsdaSearch(
       new Request(`${SEARCH_URL}?q=lentejas`),
@@ -78,9 +126,72 @@ describe('búsqueda en USDA', () => {
     expect(response.status).toBe(500);
     expect(called).toBe(false);
     const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('server_misconfigured');
     // El mensaje no menciona el nombre de la variable ni ningún detalle
     // interno: eso queda en los registros del servidor, no en la respuesta.
     expect(body.error.message).not.toContain('USDA_API_KEY');
+    // Y no dice que sea pasajero: reintentar no va a arreglar una
+    // configuración rota (D-056).
+    expect(body.error.message).not.toMatch(/moment|pasajero|espera/i);
+  });
+
+  /**
+   * D-056. `api/usda/search.ts` -el archivo que Vercel invoca de verdad- NO
+   * pasa `env` en `deps`: se apoya en que `requireApiKey` cae a
+   * `process.env` por su parámetro por defecto. Esta prueba es la única de
+   * todo el archivo que corre exactamente ese camino, con la clave real
+   * ausente de verdad (`withoutRealApiKey`, no un objeto de mentira). Antes
+   * de esta prueba, ninguna cubría esta rama: todas construían `deps` con un
+   * `env` ya puesto, así que el `= process.env` por defecto nunca se llegó a
+   * ejecutar en ningún test.
+   */
+  it('sin env en absoluto (como en producción) y sin la clave real, da el error controlado', async () => {
+    await withoutRealApiKey(async () => {
+      let called = false;
+      const response = await handleUsdaSearch(
+        new Request(`${SEARCH_URL}?q=lentejas`),
+        depsSinEnv({
+          fetchImpl: () => {
+            called = true;
+            return Promise.resolve(new Response(null, { status: 200 }));
+          },
+        }),
+      );
+
+      expect(response.status).toBe(500);
+      expect(called).toBe(false);
+      const body = (await response.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('server_misconfigured');
+    });
+  });
+
+  /**
+   * D-056: antes, solo se capturaba `MissingApiKeyError`; cualquier otra
+   * excepción al leer la configuración se dejaba escapar sin capturar y
+   * tumbaba la función entera con un 500 desnudo (el síntoma real visto en
+   * producción, con duraciones de función de pocos milisegundos). Este test
+   * fuerza precisamente esa otra excepción -un `env` que revienta al leerse,
+   * no una clave simplemente ausente- para comprobar que también cae en el
+   * mismo camino controlado.
+   */
+  it('cualquier fallo al leer la configuración -no solo la clave ausente- da el mismo error controlado', async () => {
+    const brokenEnv = new Proxy(
+      {},
+      {
+        get(): never {
+          throw new Error('fallo inesperado leyendo la configuración');
+        },
+      },
+    ) as Record<string, string | undefined>;
+
+    const response = await handleUsdaSearch(
+      new Request(`${SEARCH_URL}?q=lentejas`),
+      deps({ env: brokenEnv }),
+    );
+
+    expect(response.status).toBe(500);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('server_misconfigured');
   });
 
   it('devuelve la lista de alimentos de la respuesta, cacheada', async () => {
@@ -191,7 +302,7 @@ describe('alimento por fdcId', () => {
     expect(called).toBe(false);
   });
 
-  it('sin la clave configurada, da un error controlado y no sale a la red', async () => {
+  it('con env vacío pasado a mano, da un error controlado y no sale a la red', async () => {
     let called = false;
     const response = await handleUsdaFood(
       new Request(`${FOOD_URL}/173410`),
@@ -206,6 +317,29 @@ describe('alimento por fdcId', () => {
 
     expect(response.status).toBe(500);
     expect(called).toBe(false);
+    const body = (await response.json()) as { error: { code: string } };
+    expect(body.error.code).toBe('server_misconfigured');
+  });
+
+  /** D-056, igual que el equivalente de la búsqueda: el camino real de producción. */
+  it('sin env en absoluto (como en producción) y sin la clave real, da el error controlado', async () => {
+    await withoutRealApiKey(async () => {
+      let called = false;
+      const response = await handleUsdaFood(
+        new Request(`${FOOD_URL}/173410`),
+        depsSinEnv({
+          fetchImpl: () => {
+            called = true;
+            return Promise.resolve(new Response(null, { status: 200 }));
+          },
+        }),
+      );
+
+      expect(response.status).toBe(500);
+      expect(called).toBe(false);
+      const body = (await response.json()) as { error: { code: string } };
+      expect(body.error.code).toBe('server_misconfigured');
+    });
   });
 
   it('un fdcId que la fuente no conoce es un 404 con cuerpo null, cacheado', async () => {

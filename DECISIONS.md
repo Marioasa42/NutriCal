@@ -1999,7 +1999,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   igual, con un `MediaStream` de mentira. Lo que no tiene test automático es
   la integración completa (cámara real, permisos, las dos APIs): eso se
   verifica a mano, en un navegador real.
-## D-054 El service worker cachea solo el *app shell*, nunca las respuestas de las dos APIs
+## D-055 El service worker cachea solo el *app shell*, nunca las respuestas de las dos APIs
 - **Fecha**: 2026-09-15
 - **Fase**: 3
 - **Estado**: aceptada
@@ -2038,7 +2038,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   modo desarrollo: no se activa con `npm run dev`), así que verificar el modo
   sin conexión de verdad exige `npm run build && npm run preview`, no basta
   con el servidor de desarrollo.
-## D-054 Exportar lee con métodos `...IncludingDeleted`, separados y de uso exclusivo
+## D-056 Exportar lee con métodos `...IncludingDeleted`, separados y de uso exclusivo
 - **Fecha**: 2026-09-15
 - **Fase**: 3
 - **Estado**: aceptada
@@ -2085,7 +2085,7 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 
 ---
 
-## D-055 Importar reconstruye con constructores dentro del propio esquema de Zod, fusiona por id y escribe en una única transacción
+## D-057 Importar reconstruye con constructores dentro del propio esquema de Zod, fusiona por id y escribe en una única transacción
 - **Fecha**: 2026-09-15
 - **Fase**: 3
 - **Estado**: aceptada
@@ -2166,3 +2166,107 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   las otras cuatro, que sí habrían tenido éxito por su cuenta, tampoco
   conservan nada: es la transacción la que se deshace entera, no solo la
   fila que rompió.
+
+---
+
+## D-058 USDA en producción: cualquier fallo al leer la configuración es un error controlado con su propio código
+- **Fecha**: 2026-09-15
+- **Fase**: 2 (incidente en producción; el código tocado es de la fase 2, D-047/D-049)
+- **Estado**: aceptada
+- **Contexto**: en producción, `/api/usda/search` devolvía 500 (no el 502 de
+  "la fuente ha fallado") con una duración de función de 9 ms según los
+  registros de Vercel -demasiado poco para haber llegado a salir por red-, y
+  el mensaje que veía quien buscaba decía que el fallo era pasajero y que
+  esperar lo arreglaría. `USDA_API_KEY` estaba configurada en Vercel para
+  Production y Preview (no para Development), y `/api/off/search` respondía
+  200 en los mismos instantes, así que la infraestructura en general
+  funcionaba.
+
+  Diagnosticado en dos pasos:
+
+  1. **Por qué un 500 y no el error controlado que los tests cubrían.**
+     `handleUsdaSearch`/`handleUsdaFood` (`api/_lib/usda-handlers.ts`) solo
+     capturaban `MissingApiKeyError` alrededor de `requireApiKey(deps.env)`,
+     y **relanzaban cualquier otra excepción sin capturar**
+     (`if (!(error instanceof MissingApiKeyError)) { throw error; }`). Los
+     dos archivos de ruta (`api/usda/search.ts`, `api/usda/food/[fdcId].ts`)
+     nunca pasan `env` en `deps`, así que en producción `requireApiKey` cae
+     siempre a su parámetro por defecto, `= process.env`. La hipótesis mejor
+     sostenida por la evidencia (9 ms, antes de cualquier red, único paso
+     que diverge del camino de OFF, que nunca toca `process.env` y sí
+     responde bien) es que la función corría bajo un runtime donde `process`
+     no es un global garantizado -Vercel puede desplegar una función con la
+     firma `export function GET(request: Request)` en su runtime Edge si no
+     se fija lo contrario-, y que simplemente **evaluar** `process.env` en
+     ese contexto lanza un `ReferenceError`, que no es `MissingApiKeyError` y
+     por tanto queda sin capturar, tumbando la función entera con el 500
+     desnudo de la plataforma (sin el cuerpo JSON que el resto de esta API
+     promete) en unos pocos milisegundos. No se ha podido confirmar contra
+     los registros de despliegue de Vercel desde aquí; queda como la
+     explicación mejor sostenida, no como un hecho verificado línea a línea.
+  2. **Por qué el mensaje decía "pasajero".** `serverMisconfigured()` incluso
+     en su forma controlada devolvía el código `upstream_error`, el mismo que
+     "USDA FoodData Central ha fallado, prueba en un momento" -literalmente
+     falso para una clave ausente o mal configurada, que no se arregla
+     reintentando.
+
+  Y por qué los tests no lo detectaban: las dos pruebas de "sin la clave
+  configurada" (`usda-handlers.test.ts`) construían `deps` con
+  `env: {}` -un objeto vacío pasado EXPLÍCITAMENTE-, así que
+  `requireApiKey` recibía ese objeto y nunca caía a su parámetro por
+  defecto. Ninguna prueba de todo el archivo ejercitaba jamás la rama
+  `= process.env` que de verdad corre en producción.
+- **Decisión**: tres piezas.
+
+  1. **Un código de error propio**, `server_misconfigured`, añadido a
+     `ErrorCode` (`api/_lib/http.ts`), a `API_ERROR_CODES`/`apiErrorSchema`
+     (`services/shared/api-error.ts`, el vocabulario compartido de D-047) y a
+     `UsdaErrorCode`/`OffErrorCode` en los dos clientes -`OffErrorCode` lo
+     lleva sin que Open Food Facts lo produzca nunca hoy, solo para que la
+     comprobación de sincronía de tipos siga cerrando-. Mensaje propio en
+     `usda-error-messages.ts` y `off-error-messages.ts`: dice explícitamente
+     que no es un fallo de la fuente ni de la conexión, y que reintentar no
+     lo arregla (`canRetry: false`).
+  2. **`resolveApiKey`** (`api/_lib/usda-handlers.ts`) sustituye el
+     `try/catch` que solo atrapaba `MissingApiKeyError`: ahora cualquier
+     excepción al resolver la clave -la conocida y cualquier otra- se
+     registra en el servidor (`console.error`, distinguiendo el mensaje
+     conocido de uno genérico) y produce siempre la misma respuesta
+     controlada, `server_misconfigured` con 500. Ninguna excepción de este
+     paso puede volver a escapar sin capturar.
+  3. **`export const config = { runtime: 'nodejs' }`** en las cuatro rutas
+     (`api/usda/search.ts`, `api/usda/food/[fdcId].ts`, y por consistencia
+     -no porque lo necesiten hoy- `api/off/search.ts` y
+     `api/off/product/[barcode].ts`), para que ninguna de estas funciones
+     vuelva a depender de qué runtime elija Vercel por defecto.
+- **Por qué**: la pieza 2 es la que de verdad cierra el agujero: aunque la
+  hipótesis del runtime Edge fuera incorrecta, CUALQUIER fallo futuro al leer
+  la configuración -no solo `MissingApiKeyError`- queda contenido ahora, y
+  eso es exactamente lo que hace que esta clase de error no pueda volver a
+  producir un 500 desnudo. La pieza 1 existe porque un código reutilizado
+  (`upstream_error`) que ya tiene un significado establecido ("espera y
+  reintenta") no puede tomar prestado ese significado para un caso que es lo
+  contrario (una configuración rota no se arregla esperando); mezclarlos es
+  el mismo error de diseño que D-040 ya corrigió una vez para
+  `upstream_rate_limited`. La pieza 3 ataca la causa más probable
+  directamente: fijar el runtime no cuesta nada y es correcto de todas
+  formas, la función necesita `process.env` de verdad.
+- **Alternativa descartada**: (a) seguir devolviendo `upstream_error` y
+  arreglar solo el texto del mensaje, descartado porque el código en sí
+  -`upstream_error`- es lo que un cliente programático miraría para decidir
+  si reintentar automáticamente, y ese código seguiría diciendo que sí; (b)
+  detectar específicamente `ReferenceError: process is not defined` y
+  tratarlo aparte de cualquier otro fallo, descartado porque ata el arreglo
+  a una única causa adivinada en vez de cerrar la clase entera de fallo que
+  el usuario pidió cerrar ("cualquier fallo al leer la configuración").
+- **Consecuencias**: el propio texto de esta entrada distingue lo verificado
+  (el código sin capturar, la brecha de las pruebas, el mensaje engañoso) de
+  lo hipotético (Edge como causa exacta del `ReferenceError`). Si el próximo
+  despliegue sigue fallando después de este cambio, los registros del
+  servidor ahora sí van a decir algo -`console.error` deja constancia real
+  del error, aunque la respuesta al navegador siga siendo genérica-, y ese
+  sería el siguiente dato a mirar. `usda-handlers.test.ts` gana
+  `depsSinEnv` y `withoutRealApiKey`, que reproducen el camino de producción
+  de verdad (nada en `deps.env`, la clave real ausente del `process.env` de
+  la propia máquina de pruebas) en vez de simular la ausencia con un objeto
+  vacío pasado a mano.

@@ -61,14 +61,53 @@ function upstreamRateLimited(retryAfterSeconds: number | undefined): Response {
 }
 
 /**
- * Falta la clave en el entorno de ejecución: un problema de despliegue, no de
- * quien busca. El mensaje que llega al navegador no dice el nombre de la
- * variable ni ningún detalle interno; ese detalle se queda en el `Error` que
- * lanzó `requireApiKey` y en los registros del servidor, nunca en la
- * respuesta HTTP.
+ * Falta o está rota la configuración del entorno de ejecución: un problema
+ * de despliegue, no de quien busca. El mensaje que llega al navegador no dice
+ * el nombre de la variable ni ningún detalle interno; ese detalle se queda en
+ * los registros del servidor, nunca en la respuesta HTTP.
+ *
+ * `server_misconfigured` es un código propio, distinto de `upstream_error`
+ * (D-056): ese dice "la fuente ha fallado, prueba en un momento", que aquí
+ * sería mentira. Un despliegue mal configurado no se arregla reintentando, y
+ * decir lo contrario le hace perder el tiempo a quien lo lee.
  */
 function serverMisconfigured(): Response {
-  return errorResponse(500, 'upstream_error', 'El servidor no está configurado correctamente.');
+  return errorResponse(
+    500,
+    'server_misconfigured',
+    'El servidor no está configurado correctamente. No es un fallo de USDA FoodData Central: hace falta corregir el despliegue.',
+  );
+}
+
+/**
+ * Resuelve la clave de API, con un único camino de fallo.
+ *
+ * D-056: antes, este paso solo capturaba `MissingApiKeyError` y dejaba pasar
+ * cualquier otra excepción sin capturar -en producción, un `ReferenceError`
+ * si `process` no existe en el entorno de ejecución de la función revienta
+ * la función entera con un 500 desnudo en unos pocos milisegundos, antes de
+ * intentar nada por red, y ESE 500 no lleva el cuerpo JSON que el resto de
+ * esta API promete, así que el cliente ni siquiera puede reconocerlo como un
+ * error nuestro. La regla ahora es: cualquier fallo al leer la
+ * configuración, sea cual sea, es un problema de servidor, nunca un 500
+ * suelto. Se registra el detalle real en el servidor -distinguiendo la causa
+ * conocida de una inesperada- y se devuelve siempre la misma respuesta
+ * controlada.
+ */
+function resolveApiKey(
+  env: UsdaHandlerDeps['env'],
+): { kind: 'ok'; apiKey: string } | { kind: 'error' } {
+  try {
+    return { kind: 'ok', apiKey: requireApiKey(env) };
+  } catch (error) {
+    console.error(
+      error instanceof MissingApiKeyError
+        ? error.message
+        : 'USDA: fallo inesperado al leer la configuración del servidor.',
+      error,
+    );
+    return { kind: 'error' };
+  }
 }
 
 export interface UsdaSearchPayload {
@@ -101,15 +140,11 @@ export async function handleUsdaSearch(request: Request, deps: UsdaHandlerDeps):
     );
   }
 
-  let apiKey: string;
-  try {
-    apiKey = requireApiKey(deps.env);
-  } catch (error) {
-    if (!(error instanceof MissingApiKeyError)) {
-      throw error;
-    }
+  const resolved = resolveApiKey(deps.env);
+  if (resolved.kind === 'error') {
     return serverMisconfigured();
   }
+  const { apiKey } = resolved;
 
   const now = deps.now();
   if (!deps.bucket.tryTake(now)) {
@@ -167,15 +202,11 @@ export async function handleUsdaFood(request: Request, deps: UsdaHandlerDeps): P
   }
   const fdcId = Number.parseInt(raw, 10);
 
-  let apiKey: string;
-  try {
-    apiKey = requireApiKey(deps.env);
-  } catch (error) {
-    if (!(error instanceof MissingApiKeyError)) {
-      throw error;
-    }
+  const resolved = resolveApiKey(deps.env);
+  if (resolved.kind === 'error') {
     return serverMisconfigured();
   }
+  const { apiKey } = resolved;
 
   const now = deps.now();
   if (!deps.bucket.tryTake(now)) {

@@ -1941,3 +1941,50 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
   (no inventar una traducción que no se tiene) y no un defecto a esconder.
   Ampliar el glosario es añadir una línea a `FOOD_TERMS`, no cambiar ninguna
   lógica.
+
+---
+
+## D-054 Exportar lee con métodos `...IncludingDeleted`, separados y de uso exclusivo
+- **Fecha**: 2026-09-15
+- **Fase**: 3
+- **Estado**: aceptada
+- **Contexto**: D-007 (fase 0) ya había fijado el contrato de tipos de la
+  exportación (`ExportEnvelope`, `ExportPayload`, `EXPORT_SCHEMA_VERSION` en
+  `domain/transfer/export.ts`) y D-006 ya exige que un borrado se propague al
+  archivo, no se filtre. Faltaba la implementación real de la lectura. Los
+  repositorios existentes excluyen las lápidas por defecto (D-014): `foods.all()`,
+  `goals.allVersions()`, etc. solo devuelven filas vivas, que es lo correcto
+  para cualquier pantalla pero exactamente lo contrario de lo que necesita
+  exportar.
+- **Decisión**: cada repositorio gana un método nuevo, con lápidas incluidas:
+  `foodRepository.allIncludingDeleted()`, `diaryRepository.allMealsIncludingDeleted()`
+  y `allExerciseIncludingDeleted()`, `goalsRepository.allVersionsIncludingDeleted()`,
+  `profileRepository.currentIncludingDeleted()`. Ninguno es un parámetro
+  opcional (`includeDeleted?: boolean`) sobre el método que ya existía: es un
+  método con nombre propio, documentado en el propio repositorio como de uso
+  exclusivo de la exportación. `domain/transfer/export-all.ts` (`createExporter`,
+  mismo patrón de inyección de dependencias que `createSeeder` en
+  `data/seed.ts`) los junta en un único `ExportEnvelope`. La versión de la
+  aplicación (`appVersion`) sale de `package.json` vía `define` de Vite
+  (`__APP_VERSION__`, `shared/lib/app-version.ts`), no de un `import` directo
+  del archivo: así el navegador no recibe el `package.json` entero
+  -dependencias, scripts- por un solo campo de diagnóstico.
+- **Por qué**: un parámetro opcional sobre `all()` habría sido un interruptor
+  fácil de activar sin querer desde cualquier pantalla nueva que llame al
+  repositorio sin mirar la firma completa; un método con nombre distinto solo
+  lo llama quien busca exactamente "incluyendo borrados" a propósito, y el
+  propio nombre en cualquier lectura del código deja claro que ese resultado
+  no es apto para mostrarse en una lista normal. Es la misma lógica que D-014
+  ya aplicó a los índices de Dexie, llevada a la capa de encima.
+- **Alternativa descartada**: (a) el parámetro opcional descrito arriba,
+  descartado por el riesgo de uso accidental; (b) que `export-all.ts` leyera
+  las tablas de Dexie directamente en vez de pasar por los repositorios,
+  descartado porque duplicaría la lógica de `fromStored`/`fromStoredFood` que
+  ya vive ahí, y porque el sembrado (`data/seed.ts`) ya sienta el precedente
+  de que hasta el código "especial" pasa por los repositorios de verdad.
+- **Consecuencias**: `ExportDataButton.tsx` (`features/profile/`) es la
+  primera pantalla que usa esto: un botón en Ajustes que descarga el JSON con
+  `Blob` + `<a download>`, sin ninguna dependencia nueva. `exportFileName`
+  (`features/profile/export-file.ts`) construye el nombre del archivo a partir
+  de la fecha del propio `exportedAt`, con su test aparte. La importación
+  (siguiente paso de la fase 3) reutiliza el mismo `ExportEnvelope`.

@@ -26,6 +26,16 @@ export function createGoalsRepository(database: NutriCalDatabase) {
       return stored.map(fromStored).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
     },
 
+    /**
+     * Todas las versiones, vivas o con lápida. Uso exclusivo de la
+     * exportación (D-006): un borrado es información que hay que propagar en
+     * el archivo. Ninguna pantalla de objetivos debería llamar a esto.
+     */
+    async allVersionsIncludingDeleted(): Promise<readonly DailyGoals[]> {
+      const stored = await database.goals.toArray();
+      return stored.map(fromStored).sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom));
+    },
+
     /** Los objetivos que regían en un día concreto, que no son los de hoy. */
     async effectiveOn(date: LocalDate): Promise<DailyGoals | undefined> {
       const stored = await database.goals.where('isDeleted').equals(ALIVE).toArray();
@@ -56,6 +66,16 @@ export function createProfileRepository(database: NutriCalDatabase) {
     async current(): Promise<Profile | undefined> {
       const stored = await database.profile.where('isDeleted').equals(ALIVE).first();
       return stored === undefined ? undefined : fromStored(stored);
+    },
+
+    /**
+     * El perfil aunque tenga lápida. Uso exclusivo de la exportación
+     * (D-006). Ninguna pantalla de ajustes debería llamar a esto.
+     */
+    async currentIncludingDeleted(): Promise<Profile | undefined> {
+      const stored = await database.profile.toArray();
+      const [first] = stored;
+      return first === undefined ? undefined : fromStored(first);
     },
   };
 }

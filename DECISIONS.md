@@ -1944,6 +1944,61 @@ nueva y la anterior pasa a estado `sustituida por D-XXX`.
 
 ---
 
+## D-054 El escáner de cámara confirma antes de navegar y libera la cámara por un único camino
+- **Fecha**: 2026-09-15
+- **Fase**: 3
+- **Estado**: aceptada
+- **Contexto**: `BarcodeField.tsx` (paso 4b) y la ruta `/dia/:date/codigo/:barcode`
+  ya estaban escritas, desde D-032, para admitir un segundo productor de
+  códigos sin tocarse. Al construir ese segundo productor (la cámara) surgieron
+  dos riesgos que no existían con la entrada manual: (1) un lector de cámara
+  puede decodificar, con mala luz, un valor plausible pero equivocado en un
+  solo fotograma, y eso llevaría en silencio a la ficha de otro producto sin
+  ningún error visible; (2) la cámara puede quedarse encendida después de
+  "cerrar" el visor si alguno de los caminos de cierre (botón, cambio de ruta,
+  desmontaje) no libera de verdad el `MediaStream`.
+- **Decisión**: `BarcodeScanner.tsx` prueba `'BarcodeDetector' in window` y usa
+  la API nativa si existe; si no, carga `@zxing/library` con un `import()`
+  perezoso (solo al abrir el visor, ya como dependencia real del proyecto, no
+  como prueba). Ninguna lectura navega directa: `barcode-confirmation.ts`
+  (módulo puro, sin DOM) exige tres fotogramas idénticos seguidos -o una
+  medida de confianza alta, si la fuente la da, aunque hoy ninguna de las dos
+  la ofrece- antes de dar un código por bueno, y el valor confirmado pasa
+  todavía por `isValidBarcode` (`contracts/barcode.ts`, D-031) antes de
+  navegar. La cámara se libera desde una única función de limpieza del
+  `useEffect` que la abre: es la misma llamada de React para las tres vías de
+  cierre (botón, cambio de ruta, desmontaje), así que no hay tres sitios que
+  puedan desincronizarse. Esa función delega en `stopMediaStream` (nueva,
+  `camera-stream.ts`, que detiene cada pista del `MediaStream`) para el camino
+  nativo, y en `reader.reset()` de zxing -que hace lo mismo internamente- para
+  el otro.
+- **Por qué**: la confirmación por repetición es barata (tres fotogramas, a lo
+  sumo unos pocos cientos de milisegundos) frente al coste de registrar una
+  comida equivocada sin darse cuenta. `isValidBarcode` después de confirmar, y
+  no en vez de confirmar, es una segunda barrera independiente: una cubre "el
+  lector se equivocó", la otra "el lector decodificó bien un formato que no es
+  un código de producto" (un QR, por ejemplo, si algún día se ampliaran los
+  formatos). Concentrar la liberación de la cámara en un único `return` del
+  efecto, en vez de en el manejador del botón y en un efecto de desmontaje por
+  separado, es lo que hace imposible que un camino de cierre se libere y otro
+  se olvide: los tres son, en el código, la misma llamada.
+- **Alternativa descartada**: (a) navegar con la primera lectura, sin
+  confirmación, descartado por el riesgo ya descrito y porque D-025 y D-031 ya
+  establecen en este proyecto que una entrada que puede venir mal (un archivo
+  importado, un código tecleado) se valida antes de actuar sobre ella, y una
+  lectura de cámara no es distinta; (b) limpiar la cámara por separado en el
+  `onClick` del botón de cerrar y en un efecto de desmontaje aparte,
+  descartado porque son dos sitios que repetirían la misma lógica y podrían
+  divergir con el tiempo -el requisito de "un único camino de limpieza" viene
+  de una petición explícita, no es un estilo elegido sin más-.
+- **Consecuencias**: `@zxing/library` es la segunda dependencia nueva de la
+  fase 3 (ya prevista por el requisito 7 de `CLAUDE.md`), cargada solo cuando
+  hace falta: el build separa su chunk (~450 KB) del paquete principal.
+  `barcode-confirmation.ts` no sabe nada de cámaras ni de `BarcodeDetector`;
+  se prueba con fotogramas de mentira, sin DOM. `camera-stream.ts` se prueba
+  igual, con un `MediaStream` de mentira. Lo que no tiene test automático es
+  la integración completa (cámara real, permisos, las dos APIs): eso se
+  verifica a mano, en un navegador real.
 ## D-054 El service worker cachea solo el *app shell*, nunca las respuestas de las dos APIs
 - **Fecha**: 2026-09-15
 - **Fase**: 3

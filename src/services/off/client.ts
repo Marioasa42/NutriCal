@@ -39,6 +39,14 @@ export type OffErrorCode =
   | 'upstream_rate_limited'
   | 'upstream_error'
   | 'upstream_timeout'
+  /**
+   * Open Food Facts no necesita ninguna clave y esta función nunca produce
+   * este código: está aquí solo porque `API_ERROR_CODES` es un vocabulario
+   * compartido con USDA (D-047), y la comprobación de sincronía de más abajo
+   * exige que las dos uniones tengan exactamente los mismos miembros. Ver
+   * D-056, donde nació para USDA.
+   */
+  | 'server_misconfigured'
   | 'network'
   | 'malformed_response';
 

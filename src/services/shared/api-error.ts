@@ -27,6 +27,7 @@ export const API_ERROR_CODES = [
   'upstream_rate_limited',
   'upstream_error',
   'upstream_timeout',
+  'server_misconfigured',
 ] as const;
 
 export const apiErrorSchema = z.object({

@@ -62,6 +62,12 @@ const MESSAGES = {
       'La respuesta ha llegado en un formato que no esperábamos. Es un fallo nuestro, no tuyo. Puedes volver a intentarlo.',
     canRetry: true,
   },
+  server_misconfigured: {
+    title: 'Hay un problema en el servidor',
+    detail:
+      'No es un fallo de USDA FoodData Central ni de tu conexión: falta corregir la configuración del servidor. Reintentarlo no lo va a arreglar.',
+    canRetry: false,
+  },
 } as const satisfies Record<UsdaErrorCode, UsdaErrorMessage>;
 
 /** Igual que en OFF: los dos únicos códigos cuyo texto cambia con los segundos de espera. */

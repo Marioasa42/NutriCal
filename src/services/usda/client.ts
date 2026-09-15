@@ -35,6 +35,7 @@ export type UsdaErrorCode =
   | 'upstream_rate_limited'
   | 'upstream_error'
   | 'upstream_timeout'
+  | 'server_misconfigured'
   | 'network'
   | 'malformed_response';
 

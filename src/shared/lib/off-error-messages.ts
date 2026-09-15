@@ -67,6 +67,13 @@ const MESSAGES = {
       'La respuesta ha llegado en un formato que no esperábamos. Es un fallo nuestro, no tuyo. Puedes volver a intentarlo.',
     canRetry: true,
   },
+  /** Open Food Facts nunca produce este código hoy. Ver el comentario de `OffErrorCode` en `client.ts`. */
+  server_misconfigured: {
+    title: 'Hay un problema en el servidor',
+    detail:
+      'No es un fallo de Open Food Facts ni de tu conexión: falta corregir la configuración del servidor. Reintentarlo no lo va a arreglar.',
+    canRetry: false,
+  },
 } as const satisfies Record<OffErrorCode, OffErrorMessage>;
 
 /**
